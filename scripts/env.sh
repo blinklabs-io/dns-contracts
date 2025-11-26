@@ -2,22 +2,22 @@
 
 # Path
 
-find_and_set_repo_home() {
-    local target_folder="decentralized-dns-contracts"
+#find_and_set_repo_home() {
+#    local target_folder="decentralized-dns-contracts"
+#
+#    local repo_path
+#    repo_path=$(find /home -type d -name "$target_folder" -not -path '*/\.*' -print -quit 2>/dev/null)
+#
+#    if [ -n "$repo_path" ]; then
+#        echo "$repo_path"
+#    else
+#        echo "$target_folder not found."
+#        exit
+#    fi
+#}
 
-    local repo_path
-    repo_path=$(find /home -type d -name "$target_folder" -not -path '*/\.*' -print -quit 2>/dev/null)
-
-    if [ -n "$repo_path" ]; then
-        echo "$repo_path"
-    else
-        echo "$target_folder not found."
-        exit
-    fi
-}
-
-REPO_HOME=$(find_and_set_repo_home)
-export NETWORK_DIR_PATH="$REPO_HOME/preprod"
+#export REPO_HOME=$(find_and_set_repo_home)
+export NETWORK_DIR_PATH="$HOME/blinklabs/decentralized-dns-contracts/preprod"
 export TESTNET_MAGIC=1
 
 ##
@@ -33,6 +33,16 @@ export REDEEMER_PATH="$NETWORK_DIR_PATH/redeemers"
 
 ##### Validators
 export Validator_Path="$NETWORK_DIR_PATH/validators"
+
+create_reference_token_tn() {
+    local self="$1"
+    echo -n "r${self}" | b2sum -b -l 256 | awk '{print $1}'
+}
+
+create_user_token_tn() {
+    local self="$1"
+    echo -n "u${self}" | b2sum -b -l 256 | awk '{print $1}'
+}
 
 get_address_biggest_lovelace() {
     cardano-cli query utxo --address $1 --testnet-magic ${TESTNET_MAGIC} |
@@ -118,9 +128,10 @@ tx_submitted() {
     fi
 
     if [ "$presence" != "null" ]; then
+        rm tmp.utxos
         echo "Transaction ID: $tx_Id"
     else
+        rm tmp.utxos
         echo "Transaction submission failed."
     fi
-    rm tmp.utxos
 }
