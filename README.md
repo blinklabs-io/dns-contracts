@@ -2,11 +2,53 @@
 
 This project demonstrates the possibility of verifying signatures generated on the Handshake blockchain on the Cardano blockchain using a Aiken smart contract. This showcases a potential path for interoperability between the two networks.
 
-The project consists of three main parts:
+## Project Structure
 
-1. **`hns-sig`**: Contains a Node.js script to generate Handshake-compatible signatures.
-2. **`onchain`**: An Aiken project containing a validator to verify these signatures on Cardano, along with associated tests.
-3. **`scripts`**: Shell scripts to interact with the Cardano blockchain for demonstration and testing purposes.
+```
+hns-sig/              # Node.js signature generation (bcrypto)
+onchain/              # Aiken smart contracts
+  validators/         # Validator source files
+    tld_registration/ # TLD registrar and reference validators
+  lib/                # Shared types and utilities
+scripts/              # Cardano CLI automation
+preprod/              # Testnet artifacts (tx, validators, wallets)
+docs/                 # Architecture and research documentation
+```
+
+## Architecture
+
+The system uses a **dual-signature cryptographic verification** approach with two interconnected validators:
+
+### Validators
+
+**tld_registrar** ([`onchain/validators/tld_registration/tld_registrar.ak`](onchain/validators/tld_registration/tld_registrar.ak))
+- Trust anchor for bridging Handshake domains to Cardano
+- Validates both registrar signature (authority) and owner signature (Handshake key holder)
+- Owner signature only required once during initial activation
+
+**tld_reference** ([`onchain/validators/tld_registration/tld_reference.ak`](onchain/validators/tld_registration/tld_reference.ak))
+- Token-based authorization layer for ongoing operations
+- Issues reference tokens (domain state) and user tokens (ownership proof)
+- Manages subdomains via linked-list structure for scalability
+
+**verify_hns_sig** ([`onchain/validators/verify_hns_sig.ak`](onchain/validators/verify_hns_sig.ak))
+- Standalone secp256k1 ECDSA signature verification demo
+
+### Validation Flow
+
+1. **Registration**: Registrar validates domain and creates on-chain registration with owner's Handshake public key
+2. **Activation**: Owner provides one-time Handshake signature to mint reference and user tokens
+3. **Operations**: Subsequent actions (subdomain management, DNS records) only require user token possession
+4. **Deregistration**: Burn all reference tokens, then registrar can remove the registration
+
+### Token System
+
+| Token | Name Derivation | Purpose |
+|-------|-----------------|---------|
+| Reference | `blake2b_256("r" ++ tld)` | Tracks domain state and DNS records |
+| User | `blake2b_256("u" ++ tld)` | Proof of ownership for operations |
+
+For detailed architecture documentation, see [`docs/architecture/validation-method.md`](docs/architecture/validation-method.md).
 
 ## Prerequisites
 
@@ -122,15 +164,16 @@ To run the full demonstration using the scripts:
 
 ## Running Validator Tests
 
-The Aiken project includes tests for the `verify_hns_sig` validator in [`onchain/test/verify_hns_sig.test.ak`](onchain/test/verify_hns_sig.test.ak). To run these tests:
+The Aiken project includes tests for the validators in [`onchain/validators/tld_registration/tests/`](onchain/validators/tld_registration/tests/). To run these tests:
 
 1. Navigate to the `onchain` directory.
 2. Run the Aiken test command.
 
     ```bash
     cd onchain
-    aiken check
+    aiken check              # Run all tests
+    aiken check -m <pattern> # Run tests matching pattern
     cd ..
     ```
 
-    This will execute the tests defined in the `.test.ak` files and report the results.
+    This will execute the tests defined in the test files and report the results.
