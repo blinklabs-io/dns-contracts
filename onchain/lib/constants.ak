@@ -26,3 +26,10 @@ pub const tld_reference_cs = blake2b_224("tld_reference_cs")
 
 pub const tld_reference_addr =
   Address(Script(tld_reference_cs), Some(stake_cred))
+
+pub const sld = "some-sld"
+
+pub const sld_reference_cs = blake2b_224("sld_reference_cs")
+
+pub const sld_reference_addr =
+  Address(Script(sld_reference_cs), Some(stake_cred))

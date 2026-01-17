@@ -1,6 +1,6 @@
 # Handshake-Cardano Interoperability Demonstration
 
-This project demonstrates the possibility of verifying signatures generated on the Handshake blockchain on the Cardano blockchain using a Aiken smart contract. This showcases a potential path for interoperability between the two networks.
+This project demonstrates the possibility of verifying signatures generated on the Handshake blockchain on the Cardano blockchain using a Aiken smart contract. This showcases a potential path for interoperability between the two networks, enabling Handshake domain owners to manage their TLDs and subdomains on Cardano.
 
 ## Project Structure
 
@@ -17,7 +17,7 @@ docs/                 # Architecture and research documentation
 
 ## Architecture
 
-The system uses a **dual-signature cryptographic verification** approach with two interconnected validators:
+The system uses a **dual-signature cryptographic verification** approach with a three-layer validator architecture:
 
 ### Validators
 
@@ -30,6 +30,11 @@ The system uses a **dual-signature cryptographic verification** approach with tw
 - Token-based authorization layer for ongoing operations
 - Issues reference tokens (domain state) and user tokens (ownership proof)
 - Manages subdomains via linked-list structure for scalability
+
+**sld_reference** ([`onchain/validators/tld_registration/sld_reference.ak`](onchain/validators/tld_registration/sld_reference.ak))
+- Manages individual subdomain token pairs
+- Stores DNS records for each subdomain
+- Coordinates minting/burning with TLD layer atomically
 
 **verify_hns_sig** ([`onchain/validators/verify_hns_sig.ak`](onchain/validators/verify_hns_sig.ak))
 - Standalone secp256k1 ECDSA signature verification demo
@@ -44,11 +49,20 @@ The system uses a **dual-signature cryptographic verification** approach with tw
 ### Token System
 
 | Token | Name Derivation | Purpose |
-|-------|-----------------|---------|
-| Reference | `blake2b_256("r" ++ tld)` | Tracks domain state and DNS records |
-| User | `blake2b_256("u" ++ tld)` | Proof of ownership for operations |
+|-------|---------------------|---------|
+|TLD Reference | `blake2b_256("r" ++ tld)` | Stores domain state and subdomain lists |
+|TLD User | `blake2b_256("u" ++ tld)` | Proof of TLD ownership |
+|SLD Reference | `blake2b_256("r" ++ sld)` | Stores subdomain DNS records |
+|SLD User | `blake2b_256("u" ++ sld)` | Proof of subdomain ownership |
 
-For detailed architecture documentation, see [`docs/architecture/validation-method.md`](docs/architecture/validation-method.md).
+### Documentation
+**Ownership Validation**: See [`docs/architecture/validation-method.md`](docs/architecture/validation-method.md) for details on how Handshake domain ownership is cryptographically proven on Cardano.
+
+**Technical Architecture**: See [`/docs/architecture/smart-contract-architecture.md`](/docs/architecture/smart-contract-architecture.md) for comprehensive technical details on:
+- Linked list architecture for scalability
+- Multi-validator coordination patterns
+- Operational workflows (split/merge, subdomain management)
+- System invariants and design rationale
 
 ## Prerequisites
 

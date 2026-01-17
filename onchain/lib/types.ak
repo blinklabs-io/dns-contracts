@@ -16,16 +16,14 @@ pub type RegistrarRedeemer {
     registrar_signature: ByteArray,
     tld_reference_policy_id: PolicyId,
   }
-  RegistrarAction {
-    registrar_signature: ByteArray,
-    tld_reference_policy_id: PolicyId,
-  }
-  OwnerAction { owner_signature: ByteArray, tld_reference_policy_id: PolicyId }
+  RegistrarAction { registrar_signature: ByteArray }
+  OwnerAction { owner_signature: ByteArray }
 }
 
 pub type DNSRecord {
   lhs: ByteArray,
   ttl: Option<Int>,
+  class: ByteArray,
   rtype: ByteArray,
   rdata: ByteArray,
 }
@@ -33,12 +31,14 @@ pub type DNSRecord {
 pub type TLDReferenceDatum {
   // top level domain on handshake
   tld: ByteArray,
-  // tld records
-  records: List<DNSRecord>,
   // slds
   slds: List<ByteArray>,
+  // policy id of sld reference
+  sld_reference_policy_id: PolicyId,
   // next sld (link), if datum gets too big
   next: ByteArray,
+  // tld records
+  records: List<DNSRecord>,
 }
 
 pub type TLDReferenceAction {
@@ -46,4 +46,19 @@ pub type TLDReferenceAction {
   MintAdditionalReference
   SpendReference
   BurnReference
+}
+
+pub type SLDReferenceDatum {
+  // top level domain on handshake
+  tld: ByteArray,
+  // sld -> present in TLDReferenceDatum
+  sld: ByteArray,
+  // sld records TLDReferenceDatum
+  records: List<DNSRecord>,
+}
+
+pub type MintSld {
+  tld: ByteArray,
+  mint_slds: List<ByteArray>,
+  burn_slds: List<ByteArray>,
 }

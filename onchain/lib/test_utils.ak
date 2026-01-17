@@ -3,10 +3,10 @@ use cardano/address.{Address, VerificationKey}
 use cardano/assets.{add, from_asset, from_lovelace}
 use cardano/transaction.{InlineDatum, NoDatum, Output, OutputReference}
 use constants.{
-  tld, tld_reference_addr, tld_reference_cs, tld_registrar_addr,
-  tld_registrar_cs,
+  sld, sld_reference_addr, sld_reference_cs, tld, tld_reference_addr,
+  tld_reference_cs, tld_registrar_addr, tld_registrar_cs,
 }
-use types.{DNSRecord, TLDReferenceDatum, TLDRegisterDatum}
+use types.{DNSRecord, SLDReferenceDatum, TLDReferenceDatum, TLDRegisterDatum}
 use utils.{create_reference_token_tn, create_user_token_tn}
 
 // ### OutputReference
@@ -43,7 +43,7 @@ pub fn create_tld_reference_output(
       create_reference_token_tn(tld),
       1,
     ),
-    InlineDatum(TLDReferenceDatum(tld, records, slds, next)),
+    InlineDatum(TLDReferenceDatum(tld, slds, sld_reference_cs, next, records)),
     None,
   )
 }
@@ -52,6 +52,28 @@ pub const create_tld_user_token_output =
   Output(
     mock_pub_key_address("u"),
     from_asset(tld_reference_cs, create_user_token_tn(tld), 1),
+    NoDatum,
+    None,
+  )
+
+pub fn create_sld_reference_output(sld: ByteArray) -> Output {
+  Output(
+    sld_reference_addr,
+    add(
+      from_lovelace(2_000_000),
+      sld_reference_cs,
+      create_reference_token_tn(sld),
+      1,
+    ),
+    InlineDatum(SLDReferenceDatum(tld, sld, [])),
+    None,
+  )
+}
+
+pub const create_sld_user_token_output =
+  Output(
+    mock_pub_key_address("u"),
+    from_asset(sld_reference_cs, create_user_token_tn(sld), 1),
     NoDatum,
     None,
   )

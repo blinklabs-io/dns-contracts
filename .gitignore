@@ -6,3 +6,5 @@ onchain/build/
 onchain/docs/
 
 hns-sig/node_modules
+
+preprod/wallets/

@@ -1,5 +1,6 @@
 use aiken/builtin.{
-  blake2b_256, head_list, unconstr_fields, verify_ecdsa_secp256k1_signature,
+  blake2b_256, fst_pair, head_list, unconstr_fields,
+  verify_ecdsa_secp256k1_signature,
 }
 use aiken/collection/dict.{empty, insert, size, to_pairs}
 use aiken/collection/list.{all, any, filter}
@@ -7,17 +8,16 @@ use aiken/option.{is_none}
 use aiken/primitive/bytearray.{concat}
 use cardano/address.{Address, Script}
 use cardano/assets.{
-  AssetName, PolicyId, Value, policies, quantity_of, to_dict, tokens,
-  without_lovelace,
+  AssetName, PolicyId, Value, policies, to_dict, tokens, without_lovelace,
 }
-use cardano/transaction.{Datum, Input, Output}
+use cardano/transaction.{Datum, Input, Output, OutputReference, find_input}
 
-pub fn create_reference_token_tn(tld: ByteArray) -> ByteArray {
-  blake2b_256(concat("r", tld))
+pub fn create_reference_token_tn(self: ByteArray) -> ByteArray {
+  blake2b_256(concat("r", self))
 }
 
-pub fn create_user_token_tn(tld: ByteArray) -> ByteArray {
-  blake2b_256(concat("u", tld))
+pub fn create_user_token_tn(self: ByteArray) -> ByteArray {
+  blake2b_256(concat("u", self))
 }
 
 pub fn verify_tld_signature(
@@ -42,22 +42,39 @@ pub fn check_output_exist(
   any(
     outputs,
     fn(output) {
-      quantity_is_one(output.value, policy_id, tn)? && output.address == address && (output.datum == datum)? && is_none(
+      single_value(output.value, policy_id, tn, 1)? && (output.address == address)? && (output.datum == datum)? && is_none(
         output.reference_script,
-      )? && two_token_value(output.value)?
+      )?
     },
   )
 }
 
 /// Check if only one token name with a specific policy id is an value with given amount.
 /// Useful to check minting values.
-pub fn single_name_of_policy_id(
-  value: Value,
-  cs: PolicyId,
-  tn: AssetName,
-  am: Int,
-) -> Bool {
+pub fn single_value(value: Value, cs: PolicyId, tn: AssetName, am: Int) -> Bool {
   insert(empty, tn, am) == tokens(value, cs)
+}
+
+/// Check if only one non ada token with a specific policy id is an value with given amount.
+pub fn single_native_value(value: Value, cs: PolicyId, tn: AssetName) -> Bool {
+  when
+    value
+      |> without_lovelace
+      |> tokens(cs)
+      |> to_pairs
+  is {
+    [Pair(tnn, _am)] -> tn == tnn
+    _ -> False
+  }
+}
+
+/// Check if only one non ada token with a specific policy id is an value with given amount.
+pub fn any_native_value(value: Value, cs: PolicyId, tn: AssetName) -> Bool {
+  let tn_am =
+    value
+      |> tokens(cs)
+      |> to_pairs
+  any(tn_am, fn(Pair(tnn, _am)) { tnn == tn })
 }
 
 pub fn all_burned(mint: Value, policy_id: PolicyId) -> Bool {
@@ -78,9 +95,13 @@ pub fn two_token_value(value: Value) -> Bool {
   }
 }
 
-/// Check there exists a policy id and token name with amount 1 in a value.
-pub fn quantity_is_one(value: Value, cs: PolicyId, tn: AssetName) -> Bool {
-  quantity_of(value, cs, tn) == 1
+/// Get a token name from a value by policy id
+/// use with caution if policy id could have multiple token names
+pub fn get_asset_name(value: Value, policy_id: PolicyId) -> AssetName {
+  tokens(value, policy_id)
+    |> to_pairs
+    |> head_list
+    |> fst_pair
 }
 
 /// Get the script hash of an address. Address must have a script payment part. 
@@ -115,28 +136,41 @@ pub fn filter_single_token_in_outputs(
   policy_id: PolicyId,
   tn: AssetName,
 ) -> List<Output> {
-  filter(outputs, fn(output) { quantity_is_one(output.value, policy_id, tn) })
+  filter(
+    outputs,
+    fn(Output { value, .. }) { any_native_value(value, policy_id, tn) },
+  )
 }
 
-pub fn filter_input_with_single_token(
+/// Filter for input with native asset
+pub fn filter_input_with_token(
   inputs: List<Input>,
   policy_id: PolicyId,
   tn: AssetName,
 ) -> List<Input> {
   filter(
     inputs,
-    fn(input) { quantity_is_one(input.output.value, policy_id, tn) },
+    fn(input) { any_native_value(input.output.value, policy_id, tn) },
   )
 }
 
-pub fn single_token_in_inputs(
+// Any input with token?
+pub fn token_in_inputs(
   inputs: List<Input>,
   policy_id: PolicyId,
   tn: AssetName,
 ) -> Bool {
-  any(inputs, fn(input) { quantity_is_one(input.output.value, policy_id, tn) })
+  any(inputs, fn(input) { any_native_value(input.output.value, policy_id, tn) })
 }
 
 pub fn get_inline_datum_output(output: Output) -> Data {
   head_list(unconstr_fields(output.datum))
+}
+
+pub fn find_input_output(
+  inputs: List<Input>,
+  output_reference: OutputReference,
+) -> Output {
+  expect Some(Input { output, .. }) = find_input(inputs, output_reference)
+  output
 }
