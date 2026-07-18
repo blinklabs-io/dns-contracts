@@ -58,11 +58,12 @@ The system uses a **dual-signature cryptographic verification** approach with a 
 ### Documentation
 **Ownership Validation**: See [`docs/architecture/validation-method.md`](docs/architecture/validation-method.md) for details on how Handshake domain ownership is cryptographically proven on Cardano.
 
-**Technical Architecture**: See [`/docs/architecture/smart-contract-architecture.md`](/docs/architecture/smart-contract-architecture.md) for comprehensive technical details on:
-- Linked list architecture for scalability
-- Multi-validator coordination patterns
-- Operational workflows (split/merge, subdomain management)
-- System invariants and design rationale
+**Technical Architecture**: See [`docs/architecture/smart-contract-architecture.md`](docs/architecture/smart-contract-architecture.md) for the complete architecture reference, with diagrams covering:
+- Parametric identity ("inheritance") chain and the data model
+- Token system, object ownership, and custody
+- End-to-end data flow and per-operation transaction anatomies
+- Multi-validator coordination and the `minted` reference-counter state machine
+- Linked-list scaling (split/merge), invariants, and design rationale
 
 ## Prerequisites
 
