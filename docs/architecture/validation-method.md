@@ -6,13 +6,13 @@ We have successfully implemented a comprehensive ownership validation system tha
 
 ## Method to Validate Ownership of a Handshake Domain on Cardano
 
-Our validation method employs a **dual-signature cryptographic verification system** implemented through two interconnected Aiken smart contract validators:
+Our validation method combines one-time owner signature verification with registrar NFT bearer authority implemented through two interconnected Aiken smart contract validators:
 
 ### 1. [Registrar Validation Layer](../../onchain/validators/tld_registration/tld_registrar.ak)
 
-The `tld_registrar` validator serves as the trust anchor between Handshake and Cardano. It validates domain ownership through:
+The `tld_registrar` validator serves as the trust anchor between Handshake and Cardano. It validates registration authority through:
 
-- **Registrar Signature Verification**: A trusted registrar signs the TLD registration, proving they have authority to bridge Handshake domains onto Cardano
+- **Registrar NFT Bearer Authorization**: The current registrar NFT holder has authority to bridge Handshake domains onto Cardano
 - **Owner Signature Verification**: The actual Handshake domain owner provides a cryptographic signature using their Handshake private key (`owner_hns_key`)
 
 The validation function `verify_tld_signature(owner_hns_key, tld, owner_signature)` cryptographically proves that:
@@ -37,12 +37,12 @@ Our implementation provides a complete, functional validation workflow:
 ### Phase 1: Initial Registration
 
 1. **Domain Owner Preparation**: The Handshake domain owner generates a cryptographic signature proving their ownership
-2. **Registrar Processing**: The registrar validates the signature and initiates registration by calling the `RegisterTLD` action
+2. **Registrar Processing**: The registrar NFT holder initiates registration by calling the `RegisterTLD` action
 3. **On-Chain Registration**: A `TLDRegisterDatum` is created containing:
    - The TLD name
    - The owner's Handshake public key (`owner_hns_key`)
    - A minting counter (initialized to 0)
-4. **NFT Minting**: A registrar NFT is minted and locked in the contract, serving as the registration record
+4. **NFT Minting**: A registrar NFT is minted and locked in the contract, serving as the registration record and authority bearer
 
 ### Phase 2: Owner Activation
 
@@ -77,7 +77,7 @@ Once activated, the owner can perform operations by holding the user token, with
 ### Phase 4: Deregistration
 
 1. **Burn All References**: Owner must burn all TLD reference tokens
-2. **Final Burn**: When `minted == 1` (last token), the registrar can execute `RegistrarAction`
+2. **Final Burn**: When `minted == 0`, the registrar NFT holder can execute `RegistrarAction`
 3. **Complete Removal**: The registrar NFT is burned, removing the TLD registration from Cardano
 
 ## Key Features of Our Implementation
@@ -87,7 +87,7 @@ Once activated, the owner can perform operations by holding the user token, with
 - **Cryptographic Proof**: Initial ownership requires valid Handshake signature verification
 - **Single Validation**: Signature checking only happens once, reducing computational overhead
 - **Token Gating**: All subsequent operations are gated by NFT possession
-- **Registrar Oversight**: Trusted registrar prevents fraudulent domain claims
+- **Registrar Oversight**: The registrar NFT holder controls the bridge authority
 
 ### Efficiency Innovations
 
@@ -110,7 +110,7 @@ Our validation system enables Handshake domain owners to:
 
 The validation mechanism is implemented across two validators:
 
-**tld_registrar.ak**: Handles initial registration and signature verification
+**tld_registrar.ak**: Handles initial registration, one-time owner signature verification, and registrar NFT bearer authority
 **tld_reference.ak**: Manages reference tokens and subdomain operations
 
 Both validators work in concert, with the registrar validator creating the initial trust anchor and the reference validator providing the operational layer for domain management.

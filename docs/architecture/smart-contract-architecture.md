@@ -98,7 +98,7 @@ so each on-chain deployment is unique to its parameters.
 
 | Validator | Source | Parameters | Spend datum | Redeemer type | Blueprint hash* |
 |-----------|--------|------------|-------------|---------------|-----------------|
-| `tld_registrar` | [`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak) | `registrar_hns_key: ByteArray`, `stake_cred: StakeCredential` | `TLDRegisterDatum` | `RegistrarRedeemer` | `f174b191…5302cc` |
+| `tld_registrar` | [`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak) | `registrar_nft_policy_id: PolicyId`, `stake_cred: StakeCredential` | `TLDRegisterDatum` | `RegistrarRedeemer` | `f174b191…5302cc` |
 | `tld_reference` | [`tld_reference.ak`](../../onchain/validators/tld_registration/tld_reference.ak) | `tld_registrar_policy_id: PolicyId`, `stake_cred: StakeCredential` | `TLDReferenceDatum` | `TLDReferenceAction` | `4b45df7d…555d06` |
 | `sld_reference` | [`sld_reference.ak`](../../onchain/validators/tld_registration/sld_reference.ak) | `tld_reference_policy_id: PolicyId`, `stake_cred: StakeCredential` | `SLDReferenceDatum` | `MintSld` (mint) / `Data` (spend) | `8bc1b1ab…1b1c8f` |
 | `verify_hns_sig` | [`verify_hns_sig.ak`](../../onchain/validators/verify_hns_sig.ak) | `msg: ByteArray` | n/a (mint-only) | `HNSData` | `b70c6922…2b581fa` |
@@ -111,7 +111,7 @@ address payment credential together with `stake_cred`.
 
 Responsibilities
 
-- `tld_registrar` - the trust anchor. Verifies the registrar (and, once, the
+- `tld_registrar` - the trust anchor. Verifies the registrar NFT bearer (and, once, the
   owner) Handshake signature, mints the single registration token, and holds
   the authoritative reference counter (`minted`) that gates deregistration.
 - `tld_reference` - domain state. Mints/burns the TLD token pair
@@ -149,7 +149,7 @@ deployment.
 
 ```mermaid
 flowchart TD
-    RK["registrar_hns_key + stake_cred"] --> REG["tld_registrar<br/>policy = P_reg"]
+    RK["registrar NFT policy + stake_cred"] --> REG["tld_registrar<br/>policy = P_reg"]
     REG -- "P_reg baked in as param" --> TLD["tld_reference<br/>policy = P_tld"]
     TLD -- "P_tld baked in as param" --> SLD["sld_reference<br/>policy = P_sld"]
 
@@ -395,7 +395,7 @@ produce exactly this shape (compressed pubkey, `BLAKE2b` digest,
 Where verification runs. Only `tld_registrar` verifies signatures, and only
 along two paths:
 
-- `RegistrarAction` (deregister) - requires a valid registrar signature.
+- `RegistrarAction` (deregister) - requires registrar NFT bearer authority.
 - `OwnerAction` when `minted == 0` (first activation) - requires a valid
   owner signature. When `minted != 0`, no signature is checked; the user
   token is the sole authority.
@@ -465,7 +465,7 @@ flowchart LR
 ```
 
 Checks ([`tld_registrar.ak:100`](../../onchain/validators/tld_registration/tld_registrar.ak#L100)):
-registrar signature valid · exactly one registration token minted
+registrar NFT bearer authority · exactly one registration token minted
 (`single_value`) · output returns to the registrar's own address (Script(P_reg)
 + `stake_cred`) with datum `minted = 0`.
 
@@ -711,7 +711,7 @@ Three authority tiers, each strictly weaker/narrower than the one that grants it
 
 ```mermaid
 flowchart TD
-    R["Registrar<br/>(holds registrar_hns_key)"] -->|"RegisterTLD: bridge a TLD onchain"| REG["Registration record"]
+    R["Registrar NFT bearer"] -->|"RegisterTLD: bridge a TLD onchain"| REG["Registration record"]
     R -->|"RegistrarAction: deregister when minted==0"| REG
     O["Handshake TLD owner<br/>(holds owner secp256k1 key)"] -->|"OwnerAction @ minted==0: one-time proof"| ACT["Activation"]
     ACT -->|"mints"| UT["TLD user token (bearer)"]
@@ -720,8 +720,8 @@ flowchart TD
     SUT -->|"possession authorizes"| SOPS["all ongoing SLD ops"]
 ```
 
-- Registrar is the trust anchor: it decides which Handshake TLDs may be
-  bridged (signature over the TLD) and is the only party that can finally release
+- Registrar is the trust anchor: the NFT bearer decides which Handshake TLDs may be
+  bridged via the registrar NFT and is the only party that can finally release
   a registration - but only when the domain is fully wound down (`minted == 0`).
   It cannot spend or alter an owner's live domain state.
 - Owner proves Handshake ownership exactly once (`OwnerAction` while

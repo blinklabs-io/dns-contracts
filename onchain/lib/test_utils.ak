@@ -3,8 +3,9 @@ use cardano/address.{Address, VerificationKey}
 use cardano/assets.{add, from_asset, from_lovelace}
 use cardano/transaction.{InlineDatum, NoDatum, Output, OutputReference}
 use constants.{
-  sld, sld_reference_addr, sld_reference_cs, tld, tld_reference_addr,
-  tld_reference_cs, tld_registrar_addr, tld_registrar_cs,
+  registrar_nft_cs, registrar_nft_tn, sld, sld_reference_addr, sld_reference_cs,
+  tld, tld_reference_addr, tld_reference_cs, tld_registrar_addr,
+  tld_registrar_cs,
 }
 use types.{DNSRecord, SLDReferenceDatum, TLDReferenceDatum, TLDRegisterDatum}
 use utils.{create_reference_token_tn, create_user_token_tn}
@@ -20,6 +21,14 @@ pub fn mock_utxo_ref(id: ByteArray, ix: Int) -> OutputReference {
 pub fn mock_pub_key_address(bytearray: ByteArray) -> Address {
   Address(VerificationKey(blake2b_224(bytearray)), None)
 }
+
+pub const create_registrar_nft_output =
+  Output(
+    mock_pub_key_address("registrar"),
+    from_asset(registrar_nft_cs, registrar_nft_tn, 1),
+    NoDatum,
+    None,
+  )
 
 pub fn create_tld_registrar_output(owner: ByteArray, int: Int) -> Output {
   Output(

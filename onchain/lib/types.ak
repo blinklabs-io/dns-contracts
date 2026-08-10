@@ -13,10 +13,9 @@ pub type RegistrarRedeemer {
   RegisterTLD {
     tld: ByteArray,
     owner: ByteArray,
-    registrar_signature: ByteArray,
     tld_reference_policy_id: PolicyId,
   }
-  RegistrarAction { registrar_signature: ByteArray }
+  RegistrarAction
   OwnerAction { owner_signature: ByteArray }
 }
 

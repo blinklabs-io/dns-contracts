@@ -17,6 +17,10 @@ pub const tld_owner_signature =
 
 pub const stake_cred = Inline(Script(blake2b_224("stake_cred")))
 
+pub const registrar_nft_cs = blake2b_224("registrar_nft_cs")
+
+pub const registrar_nft_tn = "registrar"
+
 pub const tld_registrar_cs = blake2b_224("tld_registrar_cs")
 
 pub const tld_registrar_addr =

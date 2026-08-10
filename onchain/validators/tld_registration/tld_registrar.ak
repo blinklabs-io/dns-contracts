@@ -24,7 +24,7 @@ use utils.{
 // INVARIANT: TLD can only be deregistered when minted == 0 (all references burned)
 
 validator tld_registrar(
-  registrar_hns_key: ByteArray,
+  registrar_nft_policy_id: PolicyId,
   stake_cred: StakeCredential,
 ) {
   spend(
@@ -34,19 +34,30 @@ validator tld_registrar(
     tx: Transaction,
   ) {
     when redeemer is {
-      RegistrarAction { registrar_signature } -> {
-        expect Some(TLDRegisterDatum { tld, minted, .. }) = datum_opt
+      RegistrarAction -> {
+        expect Some(TLDRegisterDatum { minted, .. }) = datum_opt
         let Transaction { inputs, outputs, .. } = tx
         let own_input = find_input_output(inputs, output_reference)
         let own_policy_id = get_script_hash_from_address(own_input.address)
-        let onw_input_token =
-          policy_id_present_in_output(own_input, own_policy_id)
+        let onw_input_token = policy_id_present_in_output(
+          own_input,
+          own_policy_id,
+        )
         // only registrar can remove tld references -> and unlock hns tld
-        let has_registrar_signed =
-          verify_tld_signature(registrar_hns_key, tld, registrar_signature)
+        let has_registrar_signed = policy_id_present_in_outputs(
+          outputs,
+          registrar_nft_policy_id,
+        )
+        // verify_tld_signature(
+        //   registrar_hns_key,
+        //   tld,
+        //   registrar_signature,
+        // )
         // no tld registration tokens in outputs -> are burned
-        let no_own_token_output =
-          !policy_id_present_in_outputs(outputs, own_policy_id)
+        let no_own_token_output = !policy_id_present_in_outputs(
+          outputs,
+          own_policy_id,
+        )
         // all tld tokens must be removed before reference can be removed
         let tld_reference_burned = minted == 0
         onw_input_token? && tld_reference_burned? && has_registrar_signed? && no_own_token_output?
@@ -60,36 +71,39 @@ validator tld_registrar(
         let own_input = find_input_output(inputs, output_reference)
         let own_address = own_input.address
         let own_policy_id = get_script_hash_from_address(own_address)
-        let tld_reference_policy_id =
-          get_asset_name(own_input.value, own_policy_id)
+        let tld_reference_policy_id = get_asset_name(
+          own_input.value,
+          own_policy_id,
+        )
         let tld_r_tn = create_reference_token_tn(tld)
         // tld reference tokens minted or burned
-        let tld_reference_mint_am =
-          quantity_of(mint, tld_reference_policy_id, tld_r_tn)
+        let tld_reference_mint_am = quantity_of(
+          mint,
+          tld_reference_policy_id,
+          tld_r_tn,
+        )
         // handshake tld owner has to sign to mint first tld token
-        let has_owner_signed =
-          if minted == 0 {
-            verify_tld_signature(owner_hns_key, tld, owner_signature)
-          } else {
-            True
-          }
-        let new_minted =
-          // Must mint or burn - zero changes are prohibited to prevent no-op transactions
-          if !(tld_reference_mint_am == 0) {
-            minted + tld_reference_mint_am
-          } else {
-            fail
-          }
-        let registration_datum =
-          InlineDatum(TLDRegisterDatum(tld, owner_hns_key, new_minted))
-        let output_exists =
-          check_output_exist(
-            outputs,
-            own_policy_id,
-            tld_reference_policy_id,
-            own_address,
-            registration_datum,
-          )
+        let has_owner_signed = if minted == 0 {
+          verify_tld_signature(owner_hns_key, tld, owner_signature)
+        } else {
+          True
+        }
+        let new_minted = // Must mint or burn - zero changes are prohibited to prevent no-op transactions
+        if !(tld_reference_mint_am == 0) {
+          minted + tld_reference_mint_am
+        } else {
+          fail
+        }
+        let registration_datum = InlineDatum(
+          TLDRegisterDatum(tld, owner_hns_key, new_minted),
+        )
+        let output_exists = check_output_exist(
+          outputs,
+          own_policy_id,
+          tld_reference_policy_id,
+          own_address,
+          registration_datum,
+        )
         has_owner_signed? && output_exists?
       }
 
@@ -99,24 +113,34 @@ validator tld_registrar(
 
   mint(redeemer: RegistrarRedeemer, policy_id: PolicyId, tx: Transaction) {
     when redeemer is {
-      RegisterTLD { tld, owner, registrar_signature, tld_reference_policy_id } -> {
+      RegisterTLD { tld, owner, tld_reference_policy_id } -> {
         let Transaction { outputs, mint, .. } = tx
-        let is_single_mint =
-          single_value(mint, policy_id, tld_reference_policy_id, 1)
-        let has_registrar_signed =
-          verify_tld_signature(registrar_hns_key, tld, registrar_signature)
+        let is_single_mint = single_value(
+          mint,
+          policy_id,
+          tld_reference_policy_id,
+          1,
+        )
+        let has_registrar_signed = policy_id_present_in_outputs(
+          outputs,
+          registrar_nft_policy_id,
+        )
+        //  let has_registrar_signed = verify_tld_signature(
+        //    registrar_hns_key,
+        //    tld,
+        //    registrar_signature,
+        //  )
         // output to this validator where stake cred provided through parameters
         let own_address = Address(Script(policy_id), Some(stake_cred))
         // tld register start by 0 tld tokens
         let registration_datum = InlineDatum(TLDRegisterDatum(tld, owner, 0))
-        let output_exists =
-          check_output_exist(
-            outputs,
-            policy_id,
-            tld_reference_policy_id,
-            own_address,
-            registration_datum,
-          )
+        let output_exists = check_output_exist(
+          outputs,
+          policy_id,
+          tld_reference_policy_id,
+          own_address,
+          registration_datum,
+        )
         has_registrar_signed? && is_single_mint? && output_exists?
       }
       RegistrarAction { .. } -> {
