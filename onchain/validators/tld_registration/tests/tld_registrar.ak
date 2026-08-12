@@ -1,10 +1,12 @@
 use cardano/assets.{from_asset, merge}
 use cardano/transaction.{Input, Transaction, placeholder}
 use constants.{
-  registrar_hns_vkey, registrar_signature, stake_cred, tld, tld_owner_signature,
-  tld_owner_vkey, tld_reference_cs, tld_registrar_cs,
+  registrar_nft_cs, stake_cred, tld, tld_owner_signature, tld_owner_vkey,
+  tld_reference_cs, tld_registrar_cs,
 }
-use test_utils.{create_tld_registrar_output, mock_utxo_ref}
+use test_utils.{
+  create_registrar_nft_output, create_tld_registrar_output, mock_utxo_ref,
+}
 use tld_registration/tld_registrar as registrar
 use types.{
   OwnerAction, RegisterTLD, RegistrarAction, RegistrarRedeemer, TLDRegisterDatum,
@@ -14,7 +16,7 @@ use utils.{create_reference_token_tn}
 // helper: mint 
 fn tld_registrar_mint(red: RegistrarRedeemer, tx: Transaction) -> Bool {
   registrar.tld_registrar.mint(
-    registrar_hns_vkey,
+    registrar_nft_cs,
     stake_cred,
     red,
     tld_registrar_cs,
@@ -26,22 +28,27 @@ fn tld_registrar_mint(red: RegistrarRedeemer, tx: Transaction) -> Bool {
 const tld_mint_succeed_tx =
   Transaction {
     ..placeholder,
-    outputs: [create_tld_registrar_output(tld_owner_vkey, 0)],
+    outputs: [
+      create_tld_registrar_output(tld_owner_vkey, 0),
+      create_registrar_nft_output,
+    ],
     mint: from_asset(tld_registrar_cs, tld_reference_cs, 1),
   }
 
 // constant: register tld redeemer
-const register_red =
-  RegisterTLD(tld, tld_owner_vkey, registrar_signature, tld_reference_cs)
+const register_red = RegisterTLD(tld, tld_owner_vkey, tld_reference_cs)
 
 test success_tld_mint() {
   tld_registrar_mint(register_red, tld_mint_succeed_tx)
 }
 
-test fail_tld_mint_registrar_signature() fail {
+test fail_tld_mint_missing_registrar_token() fail {
   tld_registrar_mint(
-    RegisterTLD(tld, tld_owner_vkey, tld_owner_signature, tld_reference_cs),
-    tld_mint_succeed_tx,
+    register_red,
+    Transaction {
+      ..tld_mint_succeed_tx,
+      outputs: [create_tld_registrar_output(tld_owner_vkey, 0)],
+    },
   )
 }
 
@@ -62,7 +69,7 @@ fn tld_registrar_spend(
   tx: Transaction,
 ) -> Bool {
   registrar.tld_registrar.spend(
-    registrar_hns_vkey,
+    registrar_nft_cs,
     stake_cred,
     Some(dat),
     red,
@@ -128,16 +135,13 @@ const tld_burn_succeed_tx =
         create_tld_registrar_output(tld_owner_vkey, 1),
       ),
     ],
+    outputs: [create_registrar_nft_output],
     mint: from_asset(tld_registrar_cs, tld_reference_cs, -1),
   }
 
 test success_tld_burn() {
-  tld_registrar_spend(
-    tld_dat,
-    RegistrarAction(registrar_signature),
-    tld_burn_succeed_tx,
-  ) && tld_registrar_mint(
-    RegistrarAction(registrar_signature),
+  tld_registrar_spend(tld_dat, RegistrarAction, tld_burn_succeed_tx) && tld_registrar_mint(
+    RegistrarAction,
     tld_burn_succeed_tx,
   )
 }
@@ -145,44 +149,38 @@ test success_tld_burn() {
 test fail_tld_burn_own_in_token() fail {
   tld_registrar_spend(
     TLDRegisterDatum("tld", tld_owner_vkey, 1),
-    RegistrarAction(registrar_signature),
+    RegistrarAction,
     tld_burn_succeed_tx,
   ) && tld_registrar_mint(register_red, tld_burn_succeed_tx)
 }
 
 test fail_tld_burn_registrar_signer() fail {
-  tld_registrar_spend(
-    tld_dat,
-    RegistrarAction(registrar_signature),
-    tld_burn_succeed_tx,
-  ) && tld_registrar_mint(
-    RegisterTLD(tld, tld_owner_vkey, tld_owner_signature, tld_reference_cs),
+  tld_registrar_spend(tld_dat, RegistrarAction, tld_burn_succeed_tx) && tld_registrar_mint(
+    RegisterTLD(tld, tld_owner_vkey, tld_reference_cs),
     tld_burn_succeed_tx,
   )
 }
 
 test fail_tld_burn_output() fail {
-  let tx =
-    Transaction {
-      ..tld_burn_succeed_tx,
-      outputs: [create_tld_registrar_output(tld_owner_signature, 1)],
-    }
-  tld_registrar_spend(tld_dat, RegistrarAction(registrar_signature), tx) && tld_registrar_mint(
+  let tx = Transaction {
+    ..tld_burn_succeed_tx,
+    outputs: [create_tld_registrar_output(tld_owner_signature, 1)],
+  }
+  tld_registrar_spend(tld_dat, RegistrarAction, tx) && tld_registrar_mint(
     register_red,
     tx,
   )
 }
 
 test fail_tld_burn_mint() fail {
-  let tx =
-    Transaction {
-      ..tld_burn_succeed_tx,
-      mint: merge(
-        from_asset(tld_registrar_cs, tld, -1),
-        from_asset(tld_registrar_cs, "tld", 1),
-      ),
-    }
-  tld_registrar_spend(tld_dat, RegistrarAction(registrar_signature), tx) && tld_registrar_mint(
+  let tx = Transaction {
+    ..tld_burn_succeed_tx,
+    mint: merge(
+      from_asset(tld_registrar_cs, tld, -1),
+      from_asset(tld_registrar_cs, "tld", 1),
+    ),
+  }
+  tld_registrar_spend(tld_dat, RegistrarAction, tx) && tld_registrar_mint(
     register_red,
     tx,
   )

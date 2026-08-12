@@ -275,7 +275,7 @@ validator tld_reference(
           = get_inline_datum_output(own_output)
         let correct_mint = single_value(mint, policy_id, tld_r_tn, -1)
         // last burn -> InitRemoveReference
-        let not_last = (minted == 1)?
+        let not_last = (minted > 1)?
         // first and last next are same as before to keep linked list in tact
         let tld_same = tld == tld_new
         let next_is_valid = if own_input_dat1.next == head_list(

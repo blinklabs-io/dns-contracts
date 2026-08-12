@@ -44,15 +44,11 @@ validator tld_registrar(
           own_policy_id,
         )
         // only registrar can remove tld references -> and unlock hns tld
-        let has_registrar_signed = policy_id_present_in_outputs(
+        let has_registrar_nft = policy_id_present_in_outputs(
           outputs,
           registrar_nft_policy_id,
         )
-        // verify_tld_signature(
-        //   registrar_hns_key,
-        //   tld,
-        //   registrar_signature,
-        // )
+
         // no tld registration tokens in outputs -> are burned
         let no_own_token_output = !policy_id_present_in_outputs(
           outputs,
@@ -60,7 +56,7 @@ validator tld_registrar(
         )
         // all tld tokens must be removed before reference can be removed
         let tld_reference_burned = minted == 0
-        onw_input_token? && tld_reference_burned? && has_registrar_signed? && no_own_token_output?
+        onw_input_token? && tld_reference_burned? && has_registrar_nft? && no_own_token_output?
       }
 
       OwnerAction { owner_signature } -> {
@@ -121,15 +117,11 @@ validator tld_registrar(
           tld_reference_policy_id,
           1,
         )
-        let has_registrar_signed = policy_id_present_in_outputs(
+        let has_registrar_nft = policy_id_present_in_outputs(
           outputs,
           registrar_nft_policy_id,
         )
-        //  let has_registrar_signed = verify_tld_signature(
-        //    registrar_hns_key,
-        //    tld,
-        //    registrar_signature,
-        //  )
+
         // output to this validator where stake cred provided through parameters
         let own_address = Address(Script(policy_id), Some(stake_cred))
         // tld register start by 0 tld tokens
@@ -141,7 +133,7 @@ validator tld_registrar(
           own_address,
           registration_datum,
         )
-        has_registrar_signed? && is_single_mint? && output_exists?
+        has_registrar_nft? && is_single_mint? && output_exists?
       }
       RegistrarAction { .. } -> {
         let Transaction { mint, .. } = tx

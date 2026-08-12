@@ -6,7 +6,7 @@ We have successfully implemented a comprehensive ownership validation system tha
 
 ## Method to Validate Ownership of a Handshake Domain on Cardano
 
-Our validation method combines one-time owner signature verification with registrar NFT bearer authority implemented through two interconnected Aiken smart contract validators:
+Our validation method combines one-time owner signature verification with registrar NFT bearer authority implemented through the `registrar_token` mint policy plus the `tld_registrar` and `tld_reference` validators:
 
 ### 1. [Registrar Validation Layer](../../onchain/validators/tld_registration/tld_registrar.ak)
 
@@ -42,7 +42,7 @@ Our implementation provides a complete, functional validation workflow:
    - The TLD name
    - The owner's Handshake public key (`owner_hns_key`)
    - A minting counter (initialized to 0)
-4. **NFT Minting**: A registrar NFT is minted and locked in the contract, serving as the registration record and authority bearer
+4. **NFT Minting**: A registrar NFT is minted by the `registrar_token` policy and locked in the contract, serving as the registration record and authority bearer
 
 ### Phase 2: Owner Activation
 
@@ -108,8 +108,9 @@ Our validation system enables Handshake domain owners to:
 
 ## Technical Implementation Details
 
-The validation mechanism is implemented across two validators:
+The validation mechanism is implemented across three on-chain pieces:
 
+**registrar_token.ak**: Mints the registrar auth NFT used by the registrar wallet
 **tld_registrar.ak**: Handles initial registration, one-time owner signature verification, and registrar NFT bearer authority
 **tld_reference.ak**: Manages reference tokens and subdomain operations
 
