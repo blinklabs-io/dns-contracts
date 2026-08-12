@@ -1,3 +1,5 @@
+use aiken/builtin.{append_bytearray, serialise_data}
+use aiken/collection/list.{any}
 use cardano/address.{Address, Script, StakeCredential}
 use cardano/assets.{PolicyId, quantity_of}
 use cardano/transaction.{InlineDatum, Output, OutputReference, Transaction}
@@ -5,8 +7,9 @@ use types.{
   OwnerAction, RegisterTLD, RegistrarAction, RegistrarRedeemer, TLDRegisterDatum,
 }
 use utils.{
-  all_burned, check_output_exist, create_reference_token_tn, find_input_output,
-  get_asset_name, get_script_hash_from_address, policy_id_present_in_output,
+  all_burned, any_native_value, check_output_exist, create_reference_token_tn,
+  create_user_token_tn, find_input_output, get_asset_name,
+  get_script_hash_from_address, policy_id_present_in_output,
   policy_id_present_in_outputs, single_value, verify_tld_signature,
 }
 
@@ -24,7 +27,7 @@ use utils.{
 // INVARIANT: TLD can only be deregistered when minted == 0 (all references burned)
 
 validator tld_registrar(
-  registrar_hns_key: ByteArray,
+  registrar_nft_policy_id: PolicyId,
   stake_cred: StakeCredential,
 ) {
   spend(
@@ -34,25 +37,32 @@ validator tld_registrar(
     tx: Transaction,
   ) {
     when redeemer is {
-      RegistrarAction { registrar_signature } -> {
-        expect Some(TLDRegisterDatum { tld, minted, .. }) = datum_opt
+      RegistrarAction -> {
+        expect Some(TLDRegisterDatum { minted, .. }) = datum_opt
         let Transaction { inputs, outputs, .. } = tx
         let own_input = find_input_output(inputs, output_reference)
         let own_policy_id = get_script_hash_from_address(own_input.address)
-        let onw_input_token =
-          policy_id_present_in_output(own_input, own_policy_id)
+        let onw_input_token = policy_id_present_in_output(
+          own_input,
+          own_policy_id,
+        )
         // only registrar can remove tld references -> and unlock hns tld
-        let has_registrar_signed =
-          verify_tld_signature(registrar_hns_key, tld, registrar_signature)
+        let has_registrar_nft = policy_id_present_in_outputs(
+          outputs,
+          registrar_nft_policy_id,
+        )
+
         // no tld registration tokens in outputs -> are burned
-        let no_own_token_output =
-          !policy_id_present_in_outputs(outputs, own_policy_id)
+        let no_own_token_output = !policy_id_present_in_outputs(
+          outputs,
+          own_policy_id,
+        )
         // all tld tokens must be removed before reference can be removed
         let tld_reference_burned = minted == 0
-        onw_input_token? && tld_reference_burned? && has_registrar_signed? && no_own_token_output?
+        onw_input_token? && tld_reference_burned? && has_registrar_nft? && no_own_token_output?
       }
 
-      OwnerAction { owner_signature } -> {
+      OwnerAction { owner_signature, receiver_address } -> {
         expect Some(TLDRegisterDatum { tld, owner_hns_key, minted }) = datum_opt
         let Transaction { inputs, outputs, mint, .. } = tx
         // Owner can mint/burn TLD reference tokens without registrar approval
@@ -60,36 +70,53 @@ validator tld_registrar(
         let own_input = find_input_output(inputs, output_reference)
         let own_address = own_input.address
         let own_policy_id = get_script_hash_from_address(own_address)
-        let tld_reference_policy_id =
-          get_asset_name(own_input.value, own_policy_id)
+        let tld_reference_policy_id = get_asset_name(
+          own_input.value,
+          own_policy_id,
+        )
         let tld_r_tn = create_reference_token_tn(tld)
         // tld reference tokens minted or burned
-        let tld_reference_mint_am =
-          quantity_of(mint, tld_reference_policy_id, tld_r_tn)
+        let tld_reference_mint_am = quantity_of(
+          mint,
+          tld_reference_policy_id,
+          tld_r_tn,
+        )
         // handshake tld owner has to sign to mint first tld token
-        let has_owner_signed =
-          if minted == 0 {
-            verify_tld_signature(owner_hns_key, tld, owner_signature)
-          } else {
-            True
-          }
-        let new_minted =
-          // Must mint or burn - zero changes are prohibited to prevent no-op transactions
-          if !(tld_reference_mint_am == 0) {
-            minted + tld_reference_mint_am
-          } else {
-            fail
-          }
-        let registration_datum =
-          InlineDatum(TLDRegisterDatum(tld, owner_hns_key, new_minted))
-        let output_exists =
-          check_output_exist(
+        let has_owner_signed = if minted == 0 {
+          verify_tld_signature(
+            owner_hns_key,
+            append_bytearray(
+              append_bytearray(tld, serialise_data(receiver_address)),
+              serialise_data(output_reference),
+            ),
+            owner_signature,
+          ) && // pin the newly minted "u" token to the signed destination          
+          any(
             outputs,
-            own_policy_id,
-            tld_reference_policy_id,
-            own_address,
-            registration_datum,
+            fn(o) {
+              any_native_value(
+                o.value,
+                tld_reference_policy_id,
+                create_user_token_tn(tld),
+              )? && (o.address == receiver_address)?
+            },
           )
+        } else {
+          True
+        }
+
+        // Must mint or burn - zero changes are prohibited to prevent no-op transactions
+        expect !(tld_reference_mint_am == 0)
+        let registration_datum = InlineDatum(
+          TLDRegisterDatum(tld, owner_hns_key, minted + tld_reference_mint_am),
+        )
+        let output_exists = check_output_exist(
+          outputs,
+          own_policy_id,
+          tld_reference_policy_id,
+          own_address,
+          registration_datum,
+        )
         has_owner_signed? && output_exists?
       }
 
@@ -99,25 +126,31 @@ validator tld_registrar(
 
   mint(redeemer: RegistrarRedeemer, policy_id: PolicyId, tx: Transaction) {
     when redeemer is {
-      RegisterTLD { tld, owner, registrar_signature, tld_reference_policy_id } -> {
+      RegisterTLD { tld, owner, tld_reference_policy_id } -> {
         let Transaction { outputs, mint, .. } = tx
-        let is_single_mint =
-          single_value(mint, policy_id, tld_reference_policy_id, 1)
-        let has_registrar_signed =
-          verify_tld_signature(registrar_hns_key, tld, registrar_signature)
+        let is_single_mint = single_value(
+          mint,
+          policy_id,
+          tld_reference_policy_id,
+          1,
+        )
+        let has_registrar_nft = policy_id_present_in_outputs(
+          outputs,
+          registrar_nft_policy_id,
+        )
+
         // output to this validator where stake cred provided through parameters
         let own_address = Address(Script(policy_id), Some(stake_cred))
         // tld register start by 0 tld tokens
         let registration_datum = InlineDatum(TLDRegisterDatum(tld, owner, 0))
-        let output_exists =
-          check_output_exist(
-            outputs,
-            policy_id,
-            tld_reference_policy_id,
-            own_address,
-            registration_datum,
-          )
-        has_registrar_signed? && is_single_mint? && output_exists?
+        let output_exists = check_output_exist(
+          outputs,
+          policy_id,
+          tld_reference_policy_id,
+          own_address,
+          registration_datum,
+        )
+        has_registrar_nft? && is_single_mint? && output_exists?
       }
       RegistrarAction { .. } -> {
         let Transaction { mint, .. } = tx

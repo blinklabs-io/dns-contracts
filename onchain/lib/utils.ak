@@ -70,10 +70,9 @@ pub fn single_native_value(value: Value, cs: PolicyId, tn: AssetName) -> Bool {
 
 /// Check if only one non ada token with a specific policy id is an value with given amount.
 pub fn any_native_value(value: Value, cs: PolicyId, tn: AssetName) -> Bool {
-  let tn_am =
-    value
-      |> tokens(cs)
-      |> to_pairs
+  let tn_am = value
+    |> tokens(cs)
+    |> to_pairs
   any(tn_am, fn(Pair(tnn, _am)) { tnn == tn })
 }
 

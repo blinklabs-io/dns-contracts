@@ -22,15 +22,11 @@ SLD_REFERENCE_REF_TX="ef635b55fce6abc39cd4c843722d9d574cb719114e224f2cd1c8747d5a
 OWNER_HNS_VKEY=$(cat $WALLET_PATH/owner1.hns | jq -r '.publicKey')
 echo "OWNER_HNS_VKEY: $OWNER_HNS_VKEY"
 
-USER_HNS_SIG=$(cat $WALLET_PATH/$USER.hns | jq -r '.signature')
-echo "USER_HNS_SIG: $USER_HNS_SIG"
-
-mint_red=$(jq -n --arg ref_cs "$CS_TLD" --arg vkey $OWNER_HNS_VKEY --arg sig $USER_HNS_SIG '{
+mint_red=$(jq -n --arg vkey "$OWNER_HNS_VKEY" --arg ref_cs "$CS_TLD" '{
     constructor: 0,
     fields: [
       {bytes: "68656c6c6f2d68616e647368616b65"},
       {bytes: $vkey},
-      {bytes: $sig},
       {bytes: $ref_cs}
     ]
   }')

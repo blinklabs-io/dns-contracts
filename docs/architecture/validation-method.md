@@ -6,18 +6,18 @@ We have successfully implemented a comprehensive ownership validation system tha
 
 ## Method to Validate Ownership of a Handshake Domain on Cardano
 
-Our validation method employs a **dual-signature cryptographic verification system** implemented through two interconnected Aiken smart contract validators:
+Our validation method combines one-time owner signature verification with registrar NFT bearer authority implemented through the `registrar_token` mint policy plus the `tld_registrar` and `tld_reference` validators:
 
 ### 1. [Registrar Validation Layer](../../onchain/validators/tld_registration/tld_registrar.ak)
 
-The `tld_registrar` validator serves as the trust anchor between Handshake and Cardano. It validates domain ownership through:
+The `tld_registrar` validator serves as the trust anchor between Handshake and Cardano. It validates registration authority through:
 
-- **Registrar Signature Verification**: A trusted registrar signs the TLD registration, proving they have authority to bridge Handshake domains onto Cardano
+- **Registrar NFT Bearer Authorization**: The current registrar NFT holder has authority to bridge Handshake domains onto Cardano
 - **Owner Signature Verification**: The actual Handshake domain owner provides a cryptographic signature using their Handshake private key (`owner_hns_key`)
 
-The validation function `verify_tld_signature(owner_hns_key, tld, owner_signature)` cryptographically proves that:
+The validation function `verify_tld_signature(owner_hns_key, message, owner_signature)` cryptographically proves that:
 - The signature was created by the holder of the private key corresponding to the Handshake domain's public key
-- The signature is bound specifically to the TLD being registered
+- The signature is bound to the TLD being registered, the exact Cardano address receiving the user token (`receiver_address`, carried in the `OwnerAction` redeemer), and the registration UTxO's own `output_reference` — so a captured signature can't be redirected to a different destination, and is single-use since the `output_reference` it's bound to no longer exists once spent
 - The signer has legitimate ownership of the Handshake domain
 
 ### 2. [Token-Based Authorization Layer](../../onchain/validators/tld_registration/tld_reference.ak)
@@ -37,16 +37,16 @@ Our implementation provides a complete, functional validation workflow:
 ### Phase 1: Initial Registration
 
 1. **Domain Owner Preparation**: The Handshake domain owner generates a cryptographic signature proving their ownership
-2. **Registrar Processing**: The registrar validates the signature and initiates registration by calling the `RegisterTLD` action
+2. **Registrar Processing**: The registrar NFT holder initiates registration by calling the `RegisterTLD` action
 3. **On-Chain Registration**: A `TLDRegisterDatum` is created containing:
    - The TLD name
    - The owner's Handshake public key (`owner_hns_key`)
    - A minting counter (initialized to 0)
-4. **NFT Minting**: A registrar NFT is minted and locked in the contract, serving as the registration record
+4. **Registration Token Minting**: `tld_registrar` mints its own registration token (distinct from the registrar auth NFT) and locks it at its own script address alongside the `TLDRegisterDatum`, serving as the on-chain registration record. The registrar auth NFT itself stays with the registrar wallet — it is never locked in the contract, and the same NFT is reused as bearer authority across every registration
 
 ### Phase 2: Owner Activation
 
-1. **First-Time Signature Requirement**: When `minted == 0`, the owner must provide their Handshake signature through the `OwnerAction` redeemer
+1. **First-Time Signature Requirement**: When `minted == 0`, the owner must provide their Handshake signature and the intended `receiver_address` through the `OwnerAction` redeemer; the newly minted user token must land at that exact address
 2. **Reference Token Initialization**: The owner triggers `InitRemoveReference` to mint:
    - One TLD reference token
    - One user token (the ownership credential)
@@ -77,7 +77,7 @@ Once activated, the owner can perform operations by holding the user token, with
 ### Phase 4: Deregistration
 
 1. **Burn All References**: Owner must burn all TLD reference tokens
-2. **Final Burn**: When `minted == 1` (last token), the registrar can execute `RegistrarAction`
+2. **Final Burn**: When `minted == 0`, the registrar NFT holder can execute `RegistrarAction`
 3. **Complete Removal**: The registrar NFT is burned, removing the TLD registration from Cardano
 
 ## Key Features of Our Implementation
@@ -87,7 +87,7 @@ Once activated, the owner can perform operations by holding the user token, with
 - **Cryptographic Proof**: Initial ownership requires valid Handshake signature verification
 - **Single Validation**: Signature checking only happens once, reducing computational overhead
 - **Token Gating**: All subsequent operations are gated by NFT possession
-- **Registrar Oversight**: Trusted registrar prevents fraudulent domain claims
+- **Registrar Oversight**: The registrar NFT holder controls the bridge authority
 
 ### Efficiency Innovations
 
@@ -108,12 +108,14 @@ Our validation system enables Handshake domain owners to:
 
 ## Technical Implementation Details
 
-The validation mechanism is implemented across two validators:
+The validation mechanism is implemented across four on-chain pieces:
 
-**tld_registrar.ak**: Handles initial registration and signature verification
+**registrar_nft.ak** (validator `registrar_token`): Mints the registrar auth NFT used by the registrar wallet
+**tld_registrar.ak**: Handles initial registration, one-time owner signature verification, and registrar NFT bearer authority
 **tld_reference.ak**: Manages reference tokens and subdomain operations
+**sld_reference.ak**: Manages SLD reference tokens and DNS records, coordinated with `tld_reference`
 
-Both validators work in concert, with the registrar validator creating the initial trust anchor and the reference validator providing the operational layer for domain management.
+These validators work in concert, with the registrar validator creating the initial trust anchor and the reference validators providing the operational layer for domain and subdomain management.
 
 The implementation has been validated through comprehensive Aiken unit tests that verify:
 - Correct signature validation logic

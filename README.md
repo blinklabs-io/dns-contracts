@@ -17,13 +17,13 @@ docs/                 # Architecture and research documentation
 
 ## Architecture
 
-The system uses a **dual-signature cryptographic verification** approach with a three-layer validator architecture:
+The system uses a **registrar NFT bearer authority plus one-time owner signature** approach with a three-layer validator architecture:
 
 ### Validators
 
 **tld_registrar** ([`onchain/validators/tld_registration/tld_registrar.ak`](onchain/validators/tld_registration/tld_registrar.ak))
 - Trust anchor for bridging Handshake domains to Cardano
-- Validates both registrar signature (authority) and owner signature (Handshake key holder)
+- Uses a registrar NFT as bearer authority and verifies the owner signature during initial activation
 - Owner signature only required once during initial activation
 
 **tld_reference** ([`onchain/validators/tld_registration/tld_reference.ak`](onchain/validators/tld_registration/tld_reference.ak))

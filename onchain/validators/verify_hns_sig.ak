@@ -30,19 +30,18 @@ validator verify_hns_sig(msg: ByteArray) {
 // Test case 1: Successful signature verification with valid inputs.
 test success_valid_signature() {
   // Replace with actual valid secp256k1 public key bytes
-  let valid_vkey =
-    #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
+  let valid_vkey = #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
 
   // Replace with the actual message bytes that were signed
-  let valid_msg =
-    #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
+  let valid_msg = #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
 
   // Replace with the actual valid secp256k1 signature bytes for the message and vkey
-  let valid_signature =
-    #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
+  let valid_signature = #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
 
-  let redeemer =
-    HNSData { hns_vkey: valid_vkey, hns_signature: valid_signature }
+  let redeemer = HNSData {
+    hns_vkey: valid_vkey,
+    hns_signature: valid_signature,
+  }
   let msg = valid_msg
 
   // Expect the builtin function to return True for valid inputs.
@@ -57,19 +56,18 @@ test success_valid_signature() {
 // Test case 2: Signature verification fails with an invalid public key.
 test fail_invalid_vkey() {
   // Replace with an invalid secp256k1 public key bytes (different from valid_vkey)
-  let invalid_vkey =
-    #"030e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
+  let invalid_vkey = #"030e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
 
   // Replace with the actual message bytes that were signed (same as success test)
-  let valid_msg =
-    #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
+  let valid_msg = #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
 
   // Replace with the actual valid secp256k1 signature bytes (same as success test)
-  let valid_signature =
-    #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
+  let valid_signature = #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
 
-  let redeemer =
-    HNSData { hns_vkey: invalid_vkey, hns_signature: valid_signature }
+  let redeemer = HNSData {
+    hns_vkey: invalid_vkey,
+    hns_signature: valid_signature,
+  }
   let msg = valid_msg
 
   // Expect the builtin function to return False for an invalid public key.
@@ -84,19 +82,18 @@ test fail_invalid_vkey() {
 // Test case 3: Signature verification fails with an invalid message.
 test fail_invalid_msg() {
   // Replace with actual valid secp256k1 public key bytes (same as success test)
-  let valid_vkey =
-    #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
+  let valid_vkey = #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
 
   // Replace with an invalid message bytes (different from valid_msg)
-  let invalid_msg =
-    #"0000a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
+  let invalid_msg = #"0000a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
 
   // Replace with the actual valid secp256k1 signature bytes (same as success test)
-  let valid_signature =
-    #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
+  let valid_signature = #"b98b87d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
 
-  let redeemer =
-    HNSData { hns_vkey: valid_vkey, hns_signature: valid_signature }
+  let redeemer = HNSData {
+    hns_vkey: valid_vkey,
+    hns_signature: valid_signature,
+  }
   let msg = invalid_msg
 
   // Expect the builtin function to return False for an invalid message.
@@ -111,19 +108,18 @@ test fail_invalid_msg() {
 // Test case 4: Signature verification fails with an invalid signature.
 test fail_invalid_signature() {
   // Replace with actual valid secp256k1 public key bytes (same as success test)
-  let valid_vkey =
-    #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
+  let valid_vkey = #"031e23f3f44c147912f9ae88bf5534fd51a2d976ab19415c4c33105baf7369ce24"
 
   // Replace with the actual message bytes that were signed (same as success test)
-  let valid_msg =
-    #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
+  let valid_msg = #"1da9a222c3e0e4f2b298327d159500a6cff91bfb23c555444a5a12a307e94d0d"
 
   // Replace with an invalid secp256k1 signature bytes (different from valid_signature)
-  let invalid_signature =
-    #"000087d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
+  let invalid_signature = #"000087d36938bbe167b4cdb7945b37ea96a4ffca0e62c4b637a985fa294d7c5429c006a14d97f29fc0903fa89bd6c6e2d5e68123e26bc78eb1b408eaaf8e8e85"
 
-  let redeemer =
-    HNSData { hns_vkey: valid_vkey, hns_signature: invalid_signature }
+  let redeemer = HNSData {
+    hns_vkey: valid_vkey,
+    hns_signature: invalid_signature,
+  }
   let msg = valid_msg
 
   // Expect the builtin function to return False for an invalid signature.

@@ -61,7 +61,6 @@ The core idea is "verify once, then tokenize":
 flowchart TB
     subgraph HNS["Handshake world"]
         HKEY["TLD owner secp256k1 keypair"]
-        RKEY["Registrar secp256k1 keypair"]
     end
 
     subgraph OFF["Off-chain tooling"]
@@ -70,21 +69,22 @@ flowchart TB
     end
 
     subgraph CARDANO["Cardano (Plutus V3)"]
+        NFT["registrar_token<br/>one-shot NFT (registrar bearer authority)"]
         REG["tld_registrar<br/>trust anchor + lifecycle"]
         TLD["tld_reference<br/>domain state + scaling"]
         SLD["sld_reference<br/>subdomain records"]
         DEMO["verify_hns_sig<br/>(standalone signature demo)"]
     end
 
-    HKEY -- "sign blake2b_256(tld)" --> SIGN
-    RKEY -- "sign blake2b_256(tld)" --> SIGN
+    HKEY -- "sign blake2b_256(tld ++ serialiseData(receiver_address) ++ serialiseData(output_reference))" --> SIGN
     SIGN -- "vkey + 64-byte sig" --> CLI
     CLI -- "build / sign / submit tx" --> REG
+    NFT -- "bearer authority (register / deregister)" --> REG
     REG -- "governs" --> TLD
     TLD -- "governs" --> SLD
 ```
 
-Three validators form the production system; `verify_hns_sig` is an isolated
+The three domain validators and the registrar auth token policy form the production system; `verify_hns_sig` is an isolated
 demonstration of the signature primitive and is not part of the domain
 lifecycle.
 
@@ -98,10 +98,10 @@ so each on-chain deployment is unique to its parameters.
 
 | Validator | Source | Parameters | Spend datum | Redeemer type | Blueprint hash* |
 |-----------|--------|------------|-------------|---------------|-----------------|
-| `tld_registrar` | [`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak) | `registrar_hns_key: ByteArray`, `stake_cred: StakeCredential` | `TLDRegisterDatum` | `RegistrarRedeemer` | `f174b191…5302cc` |
+| `registrar_token` | [`registrar_nft.ak`](../../onchain/validators/tld_registration/registrar_nft.ak) | `output_reference: OutputReference` | n/a (mint-only) | `AssetName` | `28d7d037…f92529a` |
+| `tld_registrar` | [`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak) | `registrar_nft_policy_id: PolicyId`, `stake_cred: StakeCredential` | `TLDRegisterDatum` | `RegistrarRedeemer` | `f174b191…5302cc` |
 | `tld_reference` | [`tld_reference.ak`](../../onchain/validators/tld_registration/tld_reference.ak) | `tld_registrar_policy_id: PolicyId`, `stake_cred: StakeCredential` | `TLDReferenceDatum` | `TLDReferenceAction` | `4b45df7d…555d06` |
 | `sld_reference` | [`sld_reference.ak`](../../onchain/validators/tld_registration/sld_reference.ak) | `tld_reference_policy_id: PolicyId`, `stake_cred: StakeCredential` | `SLDReferenceDatum` | `MintSld` (mint) / `Data` (spend) | `8bc1b1ab…1b1c8f` |
-| `verify_hns_sig` | [`verify_hns_sig.ak`](../../onchain/validators/verify_hns_sig.ak) | `msg: ByteArray` | n/a (mint-only) | `HNSData` | `b70c6922…2b581fa` |
 
 \* Hashes are the compiled blueprint hashes from
 [`onchain/plutus.json`](../../onchain/plutus.json). Because each validator takes
@@ -111,9 +111,11 @@ address payment credential together with `stake_cred`.
 
 Responsibilities
 
-- `tld_registrar` - the trust anchor. Verifies the registrar (and, once, the
-  owner) Handshake signature, mints the single registration token, and holds
-  the authoritative reference counter (`minted`) that gates deregistration.
+- `registrar_token` - the registrar auth mint policy. Mints the one-shot registrar NFT that the registrar wallet holds to authorize registration and final release.
+- `tld_registrar` - the trust anchor. Uses the registrar NFT bearer as the
+  registrar authority, verifies the owner Handshake signature once during
+  activation, mints the single registration token, and holds the authoritative
+  reference counter (`minted`) that gates deregistration.
 - `tld_reference` - domain state. Mints/burns the TLD token pair
   (reference + user), stores the subdomain list + DNS records, and scales via a
   linked list of UTxOs (split/merge). Coordinates SLD minting.
@@ -149,7 +151,7 @@ deployment.
 
 ```mermaid
 flowchart TD
-    RK["registrar_hns_key + stake_cred"] --> REG["tld_registrar<br/>policy = P_reg"]
+    RK["registrar NFT policy + stake_cred"] --> REG["tld_registrar<br/>policy = P_reg"]
     REG -- "P_reg baked in as param" --> TLD["tld_reference<br/>policy = P_tld"]
     TLD -- "P_tld baked in as param" --> SLD["sld_reference<br/>policy = P_sld"]
 
@@ -279,9 +281,9 @@ Redeemer → action mapping
 
 | Redeemer | Handler | Effect |
 |----------|---------|--------|
-| `RegisterTLD{tld, owner, registrar_signature, tld_reference_policy_id}` | registrar `mint` | Register a TLD; mint the registration token. |
-| `OwnerAction{owner_signature}` | registrar `spend` | Mint/burn TLD reference tokens; update `minted`. First mint requires the owner signature. |
-| `RegistrarAction{registrar_signature}` | registrar `spend`+`mint` | Deregister (burn registration token) once `minted == 0`. |
+| `RegisterTLD{tld, owner, tld_reference_policy_id}` | registrar `mint` | Register a TLD; mint the registration token. Requires the registrar NFT present in outputs. |
+| `OwnerAction{owner_signature, receiver_address}` | registrar `spend` | Mint/burn TLD reference tokens; update `minted`. First mint requires the owner signature (bound to `receiver_address` and this spend's `output_reference`) and the user token landing at `receiver_address`. |
+| `RegistrarAction` | registrar `spend`+`mint` | Deregister (burn registration token) once `minted == 0`. Requires the registrar NFT present in outputs. |
 | `InitRemoveReference` | reference `mint` | Mint (first) or burn (last) the TLD reference/user token pair. |
 | `SpendReference` | reference `spend` | Add/remove SLDs and edit TLD records. |
 | `MintAdditionalReference` | reference `mint` | Split: 1 UTxO → 2 UTxOs (more datum space). |
@@ -304,6 +306,7 @@ user token name      = blake2b_256("u" ++ name)   // the ownership credential
 
 | Token | Policy | Name | Quantity | Custodian | Role |
 |-------|--------|------|----------|---------------|------|
+| Registrar auth NFT | `registrar_token` | `output_reference`-bound NFT | exactly 1 | registrar wallet | Bearer credential that authorizes `RegisterTLD` and `RegistrarAction`. |
 | Registration | `P_reg` (`tld_registrar`) | `= P_tld` (child policy id) | 1 | `tld_registrar` script | Proof the TLD is registered; carries `minted`. |
 | TLD reference | `P_tld` (`tld_reference`) | `blake2b_256("r" ++ tld)` | 1 per UTxO (≥1 after splits) | `tld_reference` script | Carries `TLDReferenceDatum` (state). |
 | TLD user | `P_tld` (`tld_reference`) | `blake2b_256("u" ++ tld)` | exactly 1 | owner wallet | Bearer credential to manage the TLD. |
@@ -320,10 +323,12 @@ flowchart LR
         SR["SLD reference token(s)<br/>+ SLDReferenceDatum"]
     end
     subgraph WALLET["Wallet custody (bearer capability)"]
+        RA["Registrar auth NFT (bearer capability)"]
         TU["TLD user token (NFT)"]
         SU["SLD user token (NFT)"]
     end
 
+    RA -. "must be present in outputs to authorize" .-> RT
     TU -. "must be an input to authorize" .-> TR
     SU -. "must be an input to authorize" .-> SR
 ```
@@ -338,6 +343,9 @@ flowchart LR
   ownership, with no contract interaction. Authorization is enforced by
   requiring the user token to appear among the transaction inputs
   (`token_in_inputs`), not by a `must_be_signed_by` check.
+- The registrar auth NFT is also custodied by a wallet. It is the bearer
+  capability that authorizes `RegisterTLD` and `RegistrarAction`; it is separate
+  from the registration record and from the TLD/SLD user tokens.
 
 > Ownership transfer / delegation is therefore just a normal UTxO send of the
 > user token - compatible with any Cardano wallet, marketplace, or DEX.
@@ -361,7 +369,12 @@ flowchart LR
 
 Handshake ownership is proven with the Plutus V3 built-in
 `verify_ecdsa_secp256k1_signature`. The message is the BLAKE2b-256 hash of the
-TLD ([`utils.ak:23`](../../onchain/lib/utils.ak#L23)):
+TLD concatenated with the `serialiseData` CBOR of the intended token
+destination and this spend's own `output_reference`
+([`utils.ak:23`](../../onchain/lib/utils.ak#L23),
+[`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak)),
+so a captured signature can't be redirected to a different address or
+replayed against a later transaction:
 
 ```aiken
 pub fn verify_tld_signature(verification_key, tld, signature) -> Bool {
@@ -373,31 +386,43 @@ pub fn verify_tld_signature(verification_key, tld, signature) -> Bool {
 }
 ```
 
+The helper itself still just hashes whatever `ByteArray` it's given — the
+`tld ++ serialise_data(receiver_address) ++ serialise_data(output_reference)`
+composition happens at the call site in `tld_registrar.ak`, which passes that
+composed byte array in as the `tld` argument.
+
 ```mermaid
 sequenceDiagram
     participant Owner as HNS owner / registrar
     participant Sign as hns-sig/sign.js (bcrypto)
     participant Chain as verify_tld_signature (on-chain)
 
-    Owner->>Sign: private key
-    Sign->>Sign: msg = BLAKE2b-256(tld)
+    Owner->>Sign: private key, receiver_address, output_reference
+    Sign->>Sign: msg = BLAKE2b-256(tld ++ serialiseData(receiver_address) ++ serialiseData(output_reference))
     Sign->>Sign: (sig, recovery) = secp256k1.signRecoverable(msg, priv)
     Sign-->>Owner: pubkey (compressed) + sig64 (r||s)
-    Owner->>Chain: redeemer carries vkey + signature
-    Chain->>Chain: verify_ecdsa_secp256k1_signature(vkey, BLAKE2b-256(tld), sig)
+    Owner->>Chain: OwnerAction { owner_signature, receiver_address }
+    Chain->>Chain: verify_ecdsa_secp256k1_signature(vkey, msg, sig) && "u" token output address == receiver_address
     Chain-->>Owner: True / False
 ```
 
 The off-chain generator [`hns-sig/sign.js`](../../hns-sig/sign.js) uses `bcrypto` to
-produce exactly this shape (compressed pubkey, `BLAKE2b` digest,
-`signRecoverable` with the recovery byte stripped to a 64-byte `r||s`).
+produce this shape (compressed pubkey, `BLAKE2b` digest,
+`signRecoverable` with the recovery byte stripped to a 64-byte `r||s`); its
+`receiver_address`/`output_reference` CBOR are currently hardcoded sample
+values taken from the Aiken test fixtures (`mock_pub_key_address("u")`,
+`mock_utxo_ref("0", 0)`), verified byte-for-byte against Aiken's own
+`serialise_data` — swap them for the real destination/UTxO to sign for an
+actual transaction.
 
 Where verification runs. Only `tld_registrar` verifies signatures, and only
 along two paths:
 
-- `RegistrarAction` (deregister) - requires a valid registrar signature.
+- `RegistrarAction` (deregister) - requires registrar NFT bearer authority.
 - `OwnerAction` when `minted == 0` (first activation) - requires a valid
-  owner signature. When `minted != 0`, no signature is checked; the user
+  owner signature bound to the redeemer's `receiver_address` and this spend's
+  `output_reference`, and requires the newly minted user token to actually be
+  sent to `receiver_address`. When `minted != 0`, neither check runs; the user
   token is the sole authority.
 
 The standalone [`verify_hns_sig`](../../onchain/validators/verify_hns_sig.ak)
@@ -423,14 +448,14 @@ stateDiagram-v2
     Split --> Active: BurnReference<br/>2 UTxOs → 1, minted −1
 
     Active --> Registered: InitRemoveReference (burn)<br/>burn final TLD pair, minted → 0
-    Registered --> [*]: RegistrarAction<br/>registrar signs, burn registration
+    Registered --> [*]: RegistrarAction<br/>registrar NFT present in outputs, burn registration token
 ```
 
 How a domain's data flows through the layers
 
 ```mermaid
 flowchart TB
-    A["1 · REGISTER<br/>registrar signs blake2b_256(tld)"] --> B["TLDRegisterDatum{tld, owner_key, minted=0}<br/>locked @ tld_registrar"]
+    A["1 · REGISTER<br/>registrar NFT bearer mints registration token"] --> B["TLDRegisterDatum{tld, owner_key, minted=0}<br/>locked @ tld_registrar"]
     B --> C["2 · ACTIVATE<br/>owner signs once (minted==0)"]
     C --> D["TLD reference token → tld_reference script<br/>TLD user token → owner wallet<br/>minted → 1"]
     D --> E["3 · ADD SLD<br/>SpendReference + MintSld (coordinated)"]
@@ -465,7 +490,7 @@ flowchart LR
 ```
 
 Checks ([`tld_registrar.ak:100`](../../onchain/validators/tld_registration/tld_registrar.ak#L100)):
-registrar signature valid · exactly one registration token minted
+registrar NFT bearer authority · exactly one registration token minted
 (`single_value`) · output returns to the registrar's own address (Script(P_reg)
 + `stake_cred`) with datum `minted = 0`.
 
@@ -528,7 +553,8 @@ two outputs partition the SLDs and re-link. Requires `minted != 0` (`not_first`)
 ### 9.6 Merge - `BurnReference` (see [§12](#12-linked-list-subdomain-storage))
 
 Two TLD reference UTxOs in → one out; burn exactly `−1` TLD reference token;
-combined SLD list preserved and re-linked. Guard: `minted == 1` (`not_last`).
+combined SLD list preserved and re-linked. Guard: `minted > 1` (`not_last`) -
+merging is valid only while more than one reference token remains.
 
 ### 9.7 Deregister - burn TLD pair, then `RegistrarAction`
 
@@ -536,9 +562,9 @@ combined SLD list preserved and re-linked. Guard: `minted == 1` (`not_last`).
 2. Merge down to a single TLD reference UTxO.
 3. `InitRemoveReference` (minted != 0 branch) burns the final `r`+`u` pair; the
    accompanying `OwnerAction` drives `minted → 0`.
-4. `RegistrarAction` (spend + mint): registrar signs, no registration token in
-   outputs (`all_burned`), and `minted == 0` - only then is the registration
-   token burned and the TLD released
+4. `RegistrarAction` (spend + mint): registrar NFT bearer authorizes the burn,
+   no registration token remains in outputs (`all_burned`), and `minted == 0` -
+   only then is the registration token burned and the TLD released
    ([`tld_registrar.ak:37`](../../onchain/validators/tld_registration/tld_registrar.ak#L37)).
 
 ---
@@ -630,7 +656,7 @@ Guards enforced on the mint side of `tld_reference`:
 |----------|-------|---------|
 | `InitRemoveReference` | branch on `minted == 0` | `0` → mint the initial pair; otherwise burn the final pair. |
 | `MintAdditionalReference` | `not_first = (minted != 0)` | Cannot split before the domain is initialized. |
-| `BurnReference` | `not_last = (minted == 1)` | Merge path (see the note in [§15](#15-implementation-notes--edge-cases)). |
+| `BurnReference` | `not_last = (minted > 1)` | Merge path (see the note in [§15](#15-implementation-notes--edge-cases)). |
 | `RegistrarAction` | `minted == 0` | Deregistration only when all references are gone. |
 
 Because these mint-side handlers read `minted` from a spent registration
@@ -711,7 +737,7 @@ Three authority tiers, each strictly weaker/narrower than the one that grants it
 
 ```mermaid
 flowchart TD
-    R["Registrar<br/>(holds registrar_hns_key)"] -->|"RegisterTLD: bridge a TLD onchain"| REG["Registration record"]
+    R["Registrar NFT bearer"] -->|"RegisterTLD: bridge a TLD onchain"| REG["Registration record"]
     R -->|"RegistrarAction: deregister when minted==0"| REG
     O["Handshake TLD owner<br/>(holds owner secp256k1 key)"] -->|"OwnerAction @ minted==0: one-time proof"| ACT["Activation"]
     ACT -->|"mints"| UT["TLD user token (bearer)"]
@@ -720,17 +746,15 @@ flowchart TD
     SUT -->|"possession authorizes"| SOPS["all ongoing SLD ops"]
 ```
 
-- Registrar is the trust anchor: it decides which Handshake TLDs may be
-  bridged (signature over the TLD) and is the only party that can finally release
-  a registration - but only when the domain is fully wound down (`minted == 0`).
-  It cannot spend or alter an owner's live domain state.
-- Owner proves Handshake ownership exactly once (`OwnerAction` while
-  `minted == 0`). After that the owner's on-chain authority is embodied entirely
-  by the TLD user token.
-- Token bearers hold capability NFTs. Control follows the token, enabling
-  transfer and delegation without any signature or registrar involvement.
 
----
+
+### Registrar NFT authentication
+
+The `registrar_token` policy mints the registrar auth NFT. `RegisterTLD` and `RegistrarAction` are authorized by the registrar NFT being present in the transaction's outputs (not consumed as an input — the NFT stays with the registrar wallet across registrations); no registrar signature is required in this architecture.
+
+- Registrar is the trust anchor: the NFT bearer decides which Handshake TLDs may be bridged via the registrar NFT and is the only party that can finally release a registration - but only when the domain is fully wound down (`minted == 0`). It cannot spend or alter an owner's live domain state.
+- Owner proves Handshake ownership exactly once (`OwnerAction` while `minted == 0`). After that the owner's on-chain authority is embodied entirely by the TLD user token.
+- Token bearers hold capability NFTs. Control follows the token, enabling transfer and delegation without any signature or registrar involvement.
 
 ## 14. Invariants & security properties
 
@@ -771,11 +795,15 @@ These are precise observations about the code as written - useful when
 extending, auditing, or building off-chain tooling. They describe behavior, not
 recommendations.
 
-- `BurnReference` (merge) guard is `minted == 1`. The variable is named
-  `not_last`, but the check is literal equality with `1`
-  ([`tld_reference.ak:252`](../../onchain/validators/tld_registration/tld_reference.ak#L252)).
-  The merge tests exercise it with a registration datum whose `minted == 1`
-  ([`tests/tld_reference.ak:116`](../../onchain/validators/tld_registration/tests/tld_reference.ak#L116)).
+- `BurnReference` (merge) guard is `minted > 1`
+  ([`tld_reference.ak:278`](../../onchain/validators/tld_registration/tld_reference.ak#L278)),
+  not literal equality with `1`. This is the semantically necessary condition
+  for the merge path: `BurnReference` requires two reference-token inputs
+  (`expect [Input, Input] = ...`), which is only possible when `minted >= 2`;
+  a guard of literal `minted == 1` would make the branch permanently
+  unreachable. Exercised by `success_tld_reference_burn_with_minted_two`
+  ([`tests/tld_reference.ak:187`](../../onchain/validators/tld_registration/tests/tld_reference.ak#L187))
+  with `minted == 2`.
   The unit tests validate each validator in isolation and do not drive the
   registrar's `OwnerAction` concurrently, so the coupling between split/merge
   mint deltas and the `minted` counter is not exercised end-to-end in the test
@@ -797,9 +825,9 @@ recommendations.
   (field-equality form). They are different functions with the same name in
   different modules.
 - Owner signature is not checked at `RegisterTLD`. Registration verifies only
-  the *registrar* signature and stores `owner` from the redeemer into the datum;
-  the *owner* signature is verified later at first `OwnerAction`
-  (`minted == 0`).
+  that the registrar NFT is present in outputs and stores `owner` from the
+  redeemer into the datum; the *owner* signature is verified later at first
+  `OwnerAction` (`minted == 0`).
 
 ---
 
@@ -811,7 +839,7 @@ recommendations.
 | Env & helpers | [`scripts/env.sh`](../../scripts/env.sh) | Paths, `create_reference_token_tn` / `create_user_token_tn` (mirrors on-chain naming with `b2sum`), UTxO lookup helpers. |
 | Wallet setup | [`scripts/create-user.sh`](../../scripts/create-user.sh) | Generate payment + stake keys/addresses. |
 | Deploy validators | [`scripts/create-validator-addrs.sh`](../../scripts/create-validator-addrs.sh) | Convert blueprints to `.plutus`, build script addresses (shared registrar stake key). |
-| 1 · Init | [`scripts/01-init-system.sh`](../../scripts/01-init-system.sh) | Publish the three validators as reference scripts. |
+| 1 · Init | [`scripts/01-init-system.sh`](../../scripts/01-init-system.sh) | Publish the three domain validators as reference scripts; mint the registrar auth NFT with `registrar_token` before registration. |
 | 2 · Register | [`scripts/02-register-tld.sh`](../../scripts/02-register-tld.sh) | `RegisterTLD` mint + registration datum. |
 | 3 · Activate | [`scripts/03-mint-tld.sh`](../../scripts/03-mint-tld.sh) | `OwnerAction` + `InitRemoveReference`; mint TLD pair. |
 | 4 · Add SLD | [`scripts/04-mint-sld.sh`](../../scripts/04-mint-sld.sh) | `SpendReference` + `MintSld`; append SLD, mint SLD pair. |

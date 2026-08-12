@@ -1,6 +1,6 @@
 name = "cdnsd/onchain"
 version = "0.0.0"
-compiler = "v1.1.19"
+compiler = "v1.1.23"
 plutus = "v3"
 license = "MIT"
 description = "Aiken contracts for project 'cdnsd/onchain'"
@@ -12,7 +12,7 @@ platform = "github"
 
 [[dependencies]]
 name = "aiken-lang/stdlib"
-version = "v2.2.0"
+version = "v3.1.0"
 source = "github"
 
 [config]
