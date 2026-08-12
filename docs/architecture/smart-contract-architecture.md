@@ -61,7 +61,6 @@ The core idea is "verify once, then tokenize":
 flowchart TB
     subgraph HNS["Handshake world"]
         HKEY["TLD owner secp256k1 keypair"]
-        RKEY["Registrar secp256k1 keypair"]
     end
 
     subgraph OFF["Off-chain tooling"]
@@ -70,16 +69,17 @@ flowchart TB
     end
 
     subgraph CARDANO["Cardano (Plutus V3)"]
+        NFT["registrar_token<br/>one-shot NFT (registrar bearer authority)"]
         REG["tld_registrar<br/>trust anchor + lifecycle"]
         TLD["tld_reference<br/>domain state + scaling"]
         SLD["sld_reference<br/>subdomain records"]
         DEMO["verify_hns_sig<br/>(standalone signature demo)"]
     end
 
-    HKEY -- "sign blake2b_256(tld)" --> SIGN
-    RKEY -- "sign blake2b_256(tld)" --> SIGN
+    HKEY -- "sign blake2b_256(tld ++ serialiseData(receiver_address) ++ serialiseData(output_reference))" --> SIGN
     SIGN -- "vkey + 64-byte sig" --> CLI
     CLI -- "build / sign / submit tx" --> REG
+    NFT -- "bearer authority (register / deregister)" --> REG
     REG -- "governs" --> TLD
     TLD -- "governs" --> SLD
 ```
@@ -369,13 +369,18 @@ flowchart LR
 
 Handshake ownership is proven with the Plutus V3 built-in
 `verify_ecdsa_secp256k1_signature`. The message is the BLAKE2b-256 hash of the
-TLD ([`utils.ak:23`](../../onchain/lib/utils.ak#L23)):
+TLD concatenated with the `serialiseData` CBOR of the intended token
+destination and this spend's own `output_reference`
+([`utils.ak:23`](../../onchain/lib/utils.ak#L23),
+[`tld_registrar.ak`](../../onchain/validators/tld_registration/tld_registrar.ak)),
+so a captured signature can't be redirected to a different address or
+replayed against a later transaction:
 
 ```aiken
-pub fn verify_tld_signature(verification_key, tld, signature) -> Bool {
+pub fn verify_tld_signature(verification_key, message, signature) -> Bool {
   verify_ecdsa_secp256k1_signature(
     verification_key,          // 33-byte compressed secp256k1 pubkey
-    blake2b_256(tld),          // 32-byte message digest
+    blake2b_256(message),      // 32-byte digest of tld ++ serialise_data(receiver_address) ++ serialise_data(output_reference)
     signature,                 // 64-byte r || s (no recovery byte)
   )
 }
@@ -387,25 +392,32 @@ sequenceDiagram
     participant Sign as hns-sig/sign.js (bcrypto)
     participant Chain as verify_tld_signature (on-chain)
 
-    Owner->>Sign: private key
-    Sign->>Sign: msg = BLAKE2b-256(tld)
+    Owner->>Sign: private key, receiver_address, output_reference
+    Sign->>Sign: msg = BLAKE2b-256(tld ++ serialiseData(receiver_address) ++ serialiseData(output_reference))
     Sign->>Sign: (sig, recovery) = secp256k1.signRecoverable(msg, priv)
     Sign-->>Owner: pubkey (compressed) + sig64 (r||s)
-    Owner->>Chain: redeemer carries vkey + signature
-    Chain->>Chain: verify_ecdsa_secp256k1_signature(vkey, BLAKE2b-256(tld), sig)
+    Owner->>Chain: OwnerAction { owner_signature, receiver_address }
+    Chain->>Chain: verify_ecdsa_secp256k1_signature(vkey, msg, sig) && "u" token output address == receiver_address
     Chain-->>Owner: True / False
 ```
 
 The off-chain generator [`hns-sig/sign.js`](../../hns-sig/sign.js) uses `bcrypto` to
-produce exactly this shape (compressed pubkey, `BLAKE2b` digest,
-`signRecoverable` with the recovery byte stripped to a 64-byte `r||s`).
+produce this shape (compressed pubkey, `BLAKE2b` digest,
+`signRecoverable` with the recovery byte stripped to a 64-byte `r||s`); its
+`receiver_address`/`output_reference` CBOR are currently hardcoded sample
+values taken from the Aiken test fixtures (`mock_pub_key_address("u")`,
+`mock_utxo_ref("0", 0)`), verified byte-for-byte against Aiken's own
+`serialise_data` — swap them for the real destination/UTxO to sign for an
+actual transaction.
 
 Where verification runs. Only `tld_registrar` verifies signatures, and only
 along two paths:
 
 - `RegistrarAction` (deregister) - requires registrar NFT bearer authority.
 - `OwnerAction` when `minted == 0` (first activation) - requires a valid
-  owner signature. When `minted != 0`, no signature is checked; the user
+  owner signature bound to the redeemer's `receiver_address` and this spend's
+  `output_reference`, and requires the newly minted user token to actually be
+  sent to `receiver_address`. When `minted != 0`, neither check runs; the user
   token is the sole authority.
 
 The standalone [`verify_hns_sig`](../../onchain/validators/verify_hns_sig.ak)

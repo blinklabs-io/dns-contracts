@@ -15,9 +15,9 @@ The `tld_registrar` validator serves as the trust anchor between Handshake and C
 - **Registrar NFT Bearer Authorization**: The current registrar NFT holder has authority to bridge Handshake domains onto Cardano
 - **Owner Signature Verification**: The actual Handshake domain owner provides a cryptographic signature using their Handshake private key (`owner_hns_key`)
 
-The validation function `verify_tld_signature(owner_hns_key, tld, owner_signature)` cryptographically proves that:
+The validation function `verify_tld_signature(owner_hns_key, message, owner_signature)` cryptographically proves that:
 - The signature was created by the holder of the private key corresponding to the Handshake domain's public key
-- The signature is bound specifically to the TLD being registered
+- The signature is bound to the TLD being registered, the exact Cardano address receiving the user token (`receiver_address`, carried in the `OwnerAction` redeemer), and the registration UTxO's own `output_reference` — so a captured signature can't be redirected to a different destination, and is single-use since the `output_reference` it's bound to no longer exists once spent
 - The signer has legitimate ownership of the Handshake domain
 
 ### 2. [Token-Based Authorization Layer](../../onchain/validators/tld_registration/tld_reference.ak)
@@ -46,7 +46,7 @@ Our implementation provides a complete, functional validation workflow:
 
 ### Phase 2: Owner Activation
 
-1. **First-Time Signature Requirement**: When `minted == 0`, the owner must provide their Handshake signature through the `OwnerAction` redeemer
+1. **First-Time Signature Requirement**: When `minted == 0`, the owner must provide their Handshake signature and the intended `receiver_address` through the `OwnerAction` redeemer; the newly minted user token must land at that exact address
 2. **Reference Token Initialization**: The owner triggers `InitRemoveReference` to mint:
    - One TLD reference token
    - One user token (the ownership credential)
