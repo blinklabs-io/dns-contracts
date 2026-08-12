@@ -185,3 +185,11 @@ test fail_tld_burn_mint() fail {
     tx,
   )
 }
+
+test fail_tld_burn_missing_registrar_token() fail {
+  let tx = Transaction { ..tld_burn_succeed_tx, outputs: [] }
+  tld_registrar_spend(tld_dat, RegistrarAction, tx) && tld_registrar_mint(
+    RegistrarAction,
+    tx,
+  )
+}
