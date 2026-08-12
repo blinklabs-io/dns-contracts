@@ -14,10 +14,15 @@ do {
 const pubKey = secp256k1.publicKeyCreate(privKey, true);
 
 // message = tld ++ serialiseData(receiver_address) ++ serialiseData(output_reference)
+// receiver_address/output_reference CBOR default to the Aiken test fixtures
+// (mock_pub_key_address("u"), mock_utxo_ref("0", 0)) but can be overridden:
+//   node sign.js <receiverAddressCborHex> <outputReferenceCborHex>
 const tldHex = Buffer.from('hello-handshake', 'utf8').toString('hex');
 const receiverAddressCborHex =
+  process.argv[2] ||
   'd8799fd8799f581ccf2020680b6315ff98ffdddde4400839a628e2360a1d1a20ed519439ffd87a80ff';
 const outputReferenceCborHex =
+  process.argv[3] ||
   'd8799f58200fd923ca5e7218c4ba3c3801c26a617ecdbfdaebb9c76ce2eca166e7855efbb800ff';
 
 const message = Buffer.from(

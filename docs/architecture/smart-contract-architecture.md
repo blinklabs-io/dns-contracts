@@ -328,7 +328,7 @@ flowchart LR
         SU["SLD user token (NFT)"]
     end
 
-    RA -. "must be an input to authorize" .-> RT
+    RA -. "must be present in outputs to authorize" .-> RT
     TU -. "must be an input to authorize" .-> TR
     SU -. "must be an input to authorize" .-> SR
 ```
@@ -443,7 +443,7 @@ stateDiagram-v2
     Split --> Active: BurnReference<br/>2 UTxOs → 1, minted −1
 
     Active --> Registered: InitRemoveReference (burn)<br/>burn final TLD pair, minted → 0
-    Registered --> [*]: RegistrarAction<br/>registrar NFT bearer spends auth token, burn registration
+    Registered --> [*]: RegistrarAction<br/>registrar NFT present in outputs, burn registration token
 ```
 
 How a domain's data flows through the layers
@@ -745,7 +745,7 @@ flowchart TD
 
 ### Registrar NFT authentication
 
-The `registrar_token` policy mints the registrar auth NFT. `RegisterTLD` and `RegistrarAction` are authorized by presenting the registrar NFT-bearing input in the transaction; no registrar signature is required in this architecture.
+The `registrar_token` policy mints the registrar auth NFT. `RegisterTLD` and `RegistrarAction` are authorized by the registrar NFT being present in the transaction's outputs (not consumed as an input — the NFT stays with the registrar wallet across registrations); no registrar signature is required in this architecture.
 
 - Registrar is the trust anchor: the NFT bearer decides which Handshake TLDs may be bridged via the registrar NFT and is the only party that can finally release a registration - but only when the domain is fully wound down (`minted == 0`). It cannot spend or alter an owner's live domain state.
 - Owner proves Handshake ownership exactly once (`OwnerAction` while `minted == 0`). After that the owner's on-chain authority is embodied entirely by the TLD user token.

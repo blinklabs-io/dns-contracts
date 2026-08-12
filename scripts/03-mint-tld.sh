@@ -33,8 +33,8 @@ TLD_REGISTRAR_REF_TX="ef635b55fce6abc39cd4c843722d9d574cb719114e224f2cd1c8747d5a
 TLD_REFERENCE_REF_TX="ef635b55fce6abc39cd4c843722d9d574cb719114e224f2cd1c8747d5abfc19e#1"
 
 # receiver_address: Address { payment_credential: VerificationKey(hash), stake_credential: Some(Inline(VerificationKey(hash))) }
-USER_PAYMENT_KEY_HASH=$(cardano-cli address key-hash --payment-verification-key-file $WALLET_PATH/$USER.vkey)
-USER_STAKE_KEY_HASH=$(cardano-cli stake-address key-hash --stake-verification-key-file $WALLET_PATH/$USER-stake.vkey)
+USER_PAYMENT_KEY_HASH=$(cardano-cli address key-hash --payment-verification-key-file "$WALLET_PATH/$USER.vkey")
+USER_STAKE_KEY_HASH=$(cardano-cli stake-address key-hash --stake-verification-key-file "$WALLET_PATH/$USER-stake.vkey")
 
 receiver_address=$(jq -n --arg pay "$USER_PAYMENT_KEY_HASH" --arg stake "$USER_STAKE_KEY_HASH" '{
     constructor: 0,
@@ -44,7 +44,7 @@ receiver_address=$(jq -n --arg pay "$USER_PAYMENT_KEY_HASH" --arg stake "$USER_S
     ]
   }')
 
-tld_red=$(jq -n --arg sig $USER_HNS_SIG --argjson addr "$receiver_address" '{
+tld_red=$(jq -n --arg sig "$USER_HNS_SIG" --argjson addr "$receiver_address" '{
     constructor: 2,
     fields: [
       {bytes: $sig},

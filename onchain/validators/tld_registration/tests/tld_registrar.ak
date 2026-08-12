@@ -5,12 +5,15 @@ use constants.{
   tld_reference_cs, tld_registrar_cs,
 }
 use test_utils.{
-  create_registrar_nft_output, create_tld_registrar_output,
-  create_tld_user_token_output, mock_pub_key_address, mock_utxo_ref,
+  create_registrar_nft_output, create_tld_reference_output,
+  create_tld_registrar_output, create_tld_user_token_output,
+  mock_pub_key_address, mock_utxo_ref,
 }
+use tld_registration/tld_reference
 use tld_registration/tld_registrar as registrar
 use types.{
-  OwnerAction, RegisterTLD, RegistrarAction, RegistrarRedeemer, TLDRegisterDatum,
+  InitRemoveReference, OwnerAction, RegisterTLD, RegistrarAction,
+  RegistrarRedeemer, TLDReferenceAction, TLDRegisterDatum,
 }
 use utils.{create_reference_token_tn}
 
@@ -190,6 +193,53 @@ test fail_owner_action_replayed_signature_new_outref() fail {
       ],
     },
   )
+}
+
+// helper: tld_reference mint
+fn tld_reference_mint(red: TLDReferenceAction, tx: Transaction) -> Bool {
+  tld_reference.tld_reference.mint(
+    tld_registrar_cs,
+    stake_cred,
+    red,
+    tld_reference_cs,
+    tx,
+  )
+}
+
+// constant: a minted==0 OwnerAction tx that mints -1 of the reference token
+// instead of +1. OwnerAction itself does not check the sign/magnitude of
+// tld_reference_mint_am, only that it's non-zero.
+const owner_action_negative_minted_tx =
+  Transaction {
+    ..placeholder,
+    inputs: [
+      Input(
+        mock_utxo_ref("0", 0),
+        create_tld_registrar_output(owner_action_vkey, 0),
+      ),
+    ],
+    outputs: [
+      create_tld_registrar_output(owner_action_vkey, -1),
+      create_tld_user_token_output,
+      create_tld_reference_output([], [], ""),
+    ],
+    mint: from_asset(tld_reference_cs, create_reference_token_tn(tld), -1),
+  }
+
+test success_owner_action_alone_allows_negative_minted() {
+  tld_registrar_spend(
+    TLDRegisterDatum(tld, owner_action_vkey, 0),
+    OwnerAction(owner_action_signature, mock_pub_key_address("u")),
+    owner_action_negative_minted_tx,
+  )
+}
+
+test fail_owner_action_negative_minted_rejected_by_tld_reference() fail {
+  tld_registrar_spend(
+    TLDRegisterDatum(tld, owner_action_vkey, 0),
+    OwnerAction(owner_action_signature, mock_pub_key_address("u")),
+    owner_action_negative_minted_tx,
+  ) && tld_reference_mint(InitRemoveReference, owner_action_negative_minted_tx)
 }
 
 // constant: burn tld success transaction

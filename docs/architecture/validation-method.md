@@ -42,7 +42,7 @@ Our implementation provides a complete, functional validation workflow:
    - The TLD name
    - The owner's Handshake public key (`owner_hns_key`)
    - A minting counter (initialized to 0)
-4. **NFT Minting**: A registrar NFT is minted by the `registrar_token` policy and locked in the contract, serving as the registration record and authority bearer
+4. **Registration Token Minting**: `tld_registrar` mints its own registration token (distinct from the registrar auth NFT) and locks it at its own script address alongside the `TLDRegisterDatum`, serving as the on-chain registration record. The registrar auth NFT itself stays with the registrar wallet — it is never locked in the contract, and the same NFT is reused as bearer authority across every registration
 
 ### Phase 2: Owner Activation
 
@@ -108,13 +108,14 @@ Our validation system enables Handshake domain owners to:
 
 ## Technical Implementation Details
 
-The validation mechanism is implemented across three on-chain pieces:
+The validation mechanism is implemented across four on-chain pieces:
 
 **registrar_token.ak**: Mints the registrar auth NFT used by the registrar wallet
 **tld_registrar.ak**: Handles initial registration, one-time owner signature verification, and registrar NFT bearer authority
 **tld_reference.ak**: Manages reference tokens and subdomain operations
+**sld_reference.ak**: Manages SLD reference tokens and DNS records, coordinated with `tld_reference`
 
-Both validators work in concert, with the registrar validator creating the initial trust anchor and the reference validator providing the operational layer for domain management.
+These validators work in concert, with the registrar validator creating the initial trust anchor and the reference validators providing the operational layer for domain and subdomain management.
 
 The implementation has been validated through comprehensive Aiken unit tests that verify:
 - Correct signature validation logic
