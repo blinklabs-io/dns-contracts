@@ -1,3 +1,4 @@
+use cardano/address.{Address}
 use cardano/assets.{PolicyId}
 
 pub type TLDRegisterDatum {
@@ -16,7 +17,7 @@ pub type RegistrarRedeemer {
     tld_reference_policy_id: PolicyId,
   }
   RegistrarAction
-  OwnerAction { owner_signature: ByteArray }
+  OwnerAction { owner_signature: ByteArray, receiver_address: Address }
 }
 
 pub type DNSRecord {

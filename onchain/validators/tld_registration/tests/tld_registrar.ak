@@ -5,7 +5,8 @@ use constants.{
   tld_reference_cs, tld_registrar_cs,
 }
 use test_utils.{
-  create_registrar_nft_output, create_tld_registrar_output, mock_utxo_ref,
+  create_registrar_nft_output, create_tld_registrar_output,
+  create_tld_user_token_output, mock_pub_key_address, mock_utxo_ref,
 }
 use tld_registration/tld_registrar as registrar
 use types.{
@@ -88,7 +89,9 @@ const tld_owner_spend_succeed_tx =
         create_tld_registrar_output(tld_owner_vkey, 0),
       ),
     ],
-    outputs: [create_tld_registrar_output(tld_owner_vkey, 1)],
+    outputs: [
+      create_tld_registrar_output(tld_owner_vkey, 1), create_tld_user_token_output,
+    ],
     mint: from_asset(tld_reference_cs, create_reference_token_tn(tld), 1),
   }
 
@@ -112,16 +115,80 @@ const tld_dat = TLDRegisterDatum(tld, tld_owner_vkey, 0)
 test success_tld_owner_spend1() {
   tld_registrar_spend(
     TLDRegisterDatum(tld, tld_owner_vkey, 1),
-    OwnerAction(""),
+    OwnerAction("", mock_pub_key_address("u")),
     tld_owner_spend_succeed_tx2,
   )
 }
 
+// signature over blake2b_256(tld ++ serialise_data(receiver_address) ++
+// serialise_data(output_reference)), with receiver_address =
+// mock_pub_key_address("u") and output_reference = mock_utxo_ref("0", 0)
+// (the fixed output_reference tld_registrar_spend always passes)
+const owner_action_vkey =
+  #"0272944b78c9c229cea12a5781602fa3c29e49d71031d44be1575aae4e47832bfe"
+
+const owner_action_signature =
+  #"7a93f21fd0b43c576dc0fee6383af1258c68caac7e1c8a854c33f8fa66d61048703356da111403169d7f7644c1a5ff73a397064e45a364268074378159429ce5"
+
 test success_tld_owner_spend2() {
   tld_registrar_spend(
-    tld_dat,
-    OwnerAction(tld_owner_signature),
-    tld_owner_spend_succeed_tx,
+    TLDRegisterDatum(tld, owner_action_vkey, 0),
+    OwnerAction(owner_action_signature, mock_pub_key_address("u")),
+    Transaction {
+      ..tld_owner_spend_succeed_tx,
+      outputs: [
+        create_tld_registrar_output(owner_action_vkey, 1),
+        create_tld_user_token_output,
+      ],
+    },
+  )
+}
+
+test fail_owner_action_wrong_destination() fail {
+  tld_registrar_spend(
+    TLDRegisterDatum(tld, owner_action_vkey, 0),
+    OwnerAction(owner_action_signature, mock_pub_key_address("someone_else")),
+    Transaction {
+      ..tld_owner_spend_succeed_tx,
+      outputs: [
+        create_tld_registrar_output(owner_action_vkey, 1),
+        create_tld_user_token_output,
+      ],
+    },
+  )
+}
+
+test fail_owner_action_missing_user_token_output() fail {
+  tld_registrar_spend(
+    TLDRegisterDatum(tld, owner_action_vkey, 0),
+    OwnerAction(owner_action_signature, mock_pub_key_address("u")),
+    Transaction {
+      ..tld_owner_spend_succeed_tx,
+      outputs: [create_tld_registrar_output(owner_action_vkey, 1)],
+    },
+  )
+}
+
+test fail_owner_action_replayed_signature_new_outref() fail {
+  registrar.tld_registrar.spend(
+    registrar_nft_cs,
+    stake_cred,
+    Some(TLDRegisterDatum(tld, owner_action_vkey, 0)),
+    OwnerAction(owner_action_signature, mock_pub_key_address("u")),
+    mock_utxo_ref("1", 0),
+    Transaction {
+      ..tld_owner_spend_succeed_tx,
+      inputs: [
+        Input(
+          mock_utxo_ref("1", 0),
+          create_tld_registrar_output(owner_action_vkey, 0),
+        ),
+      ],
+      outputs: [
+        create_tld_registrar_output(owner_action_vkey, 1),
+        create_tld_user_token_output,
+      ],
+    },
   )
 }
 

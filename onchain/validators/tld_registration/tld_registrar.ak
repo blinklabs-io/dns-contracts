@@ -1,3 +1,5 @@
+use aiken/builtin.{append_bytearray, serialise_data}
+use aiken/collection/list.{any}
 use cardano/address.{Address, Script, StakeCredential}
 use cardano/assets.{PolicyId, quantity_of}
 use cardano/transaction.{InlineDatum, Output, OutputReference, Transaction}
@@ -5,8 +7,9 @@ use types.{
   OwnerAction, RegisterTLD, RegistrarAction, RegistrarRedeemer, TLDRegisterDatum,
 }
 use utils.{
-  all_burned, check_output_exist, create_reference_token_tn, find_input_output,
-  get_asset_name, get_script_hash_from_address, policy_id_present_in_output,
+  all_burned, any_native_value, check_output_exist, create_reference_token_tn,
+  create_user_token_tn, find_input_output, get_asset_name,
+  get_script_hash_from_address, policy_id_present_in_output,
   policy_id_present_in_outputs, single_value, verify_tld_signature,
 }
 
@@ -59,7 +62,7 @@ validator tld_registrar(
         onw_input_token? && tld_reference_burned? && has_registrar_nft? && no_own_token_output?
       }
 
-      OwnerAction { owner_signature } -> {
+      OwnerAction { owner_signature, receiver_address } -> {
         expect Some(TLDRegisterDatum { tld, owner_hns_key, minted }) = datum_opt
         let Transaction { inputs, outputs, mint, .. } = tx
         // Owner can mint/burn TLD reference tokens without registrar approval
@@ -80,10 +83,28 @@ validator tld_registrar(
         )
         // handshake tld owner has to sign to mint first tld token
         let has_owner_signed = if minted == 0 {
-          verify_tld_signature(owner_hns_key, tld, owner_signature)
+          verify_tld_signature(
+            owner_hns_key,
+            append_bytearray(
+              append_bytearray(tld, serialise_data(receiver_address)),
+              serialise_data(output_reference),
+            ),
+            owner_signature,
+          ) && // pin the newly minted "u" token to the signed destination          
+          any(
+            outputs,
+            fn(o) {
+              any_native_value(
+                o.value,
+                tld_reference_policy_id,
+                create_user_token_tn(tld),
+              )? && (o.address == receiver_address)?
+            },
+          )
         } else {
           True
         }
+
         let new_minted = // Must mint or burn - zero changes are prohibited to prevent no-op transactions
         if !(tld_reference_mint_am == 0) {
           minted + tld_reference_mint_am
