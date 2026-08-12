@@ -281,9 +281,9 @@ Redeemer → action mapping
 
 | Redeemer | Handler | Effect |
 |----------|---------|--------|
-| `RegisterTLD{tld, owner, registrar_signature, tld_reference_policy_id}` | registrar `mint` | Register a TLD; mint the registration token. |
-| `OwnerAction{owner_signature}` | registrar `spend` | Mint/burn TLD reference tokens; update `minted`. First mint requires the owner signature. |
-| `RegistrarAction{registrar_signature}` | registrar `spend`+`mint` | Deregister (burn registration token) once `minted == 0`. |
+| `RegisterTLD{tld, owner, tld_reference_policy_id}` | registrar `mint` | Register a TLD; mint the registration token. Requires the registrar NFT present in outputs. |
+| `OwnerAction{owner_signature, receiver_address}` | registrar `spend` | Mint/burn TLD reference tokens; update `minted`. First mint requires the owner signature (bound to `receiver_address` and this spend's `output_reference`) and the user token landing at `receiver_address`. |
+| `RegistrarAction` | registrar `spend`+`mint` | Deregister (burn registration token) once `minted == 0`. Requires the registrar NFT present in outputs. |
 | `InitRemoveReference` | reference `mint` | Mint (first) or burn (last) the TLD reference/user token pair. |
 | `SpendReference` | reference `spend` | Add/remove SLDs and edit TLD records. |
 | `MintAdditionalReference` | reference `mint` | Split: 1 UTxO → 2 UTxOs (more datum space). |
@@ -825,9 +825,9 @@ recommendations.
   (field-equality form). They are different functions with the same name in
   different modules.
 - Owner signature is not checked at `RegisterTLD`. Registration verifies only
-  the *registrar* signature and stores `owner` from the redeemer into the datum;
-  the *owner* signature is verified later at first `OwnerAction`
-  (`minted == 0`).
+  that the registrar NFT is present in outputs and stores `owner` from the
+  redeemer into the datum; the *owner* signature is verified later at first
+  `OwnerAction` (`minted == 0`).
 
 ---
 
