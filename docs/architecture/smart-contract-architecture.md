@@ -377,14 +377,19 @@ so a captured signature can't be redirected to a different address or
 replayed against a later transaction:
 
 ```aiken
-pub fn verify_tld_signature(verification_key, message, signature) -> Bool {
+pub fn verify_tld_signature(verification_key, tld, signature) -> Bool {
   verify_ecdsa_secp256k1_signature(
     verification_key,          // 33-byte compressed secp256k1 pubkey
-    blake2b_256(message),      // 32-byte digest of tld ++ serialise_data(receiver_address) ++ serialise_data(output_reference)
+    blake2b_256(tld),          // 32-byte message digest
     signature,                 // 64-byte r || s (no recovery byte)
   )
 }
 ```
+
+The helper itself still just hashes whatever `ByteArray` it's given — the
+`tld ++ serialise_data(receiver_address) ++ serialise_data(output_reference)`
+composition happens at the call site in `tld_registrar.ak`, which passes that
+composed byte array in as the `tld` argument.
 
 ```mermaid
 sequenceDiagram
@@ -797,7 +802,7 @@ recommendations.
   (`expect [Input, Input] = ...`), which is only possible when `minted >= 2`;
   a guard of literal `minted == 1` would make the branch permanently
   unreachable. Exercised by `success_tld_reference_burn_with_minted_two`
-  ([`tests/tld_reference.ak:188`](../../onchain/validators/tld_registration/tests/tld_reference.ak#L188))
+  ([`tests/tld_reference.ak:187`](../../onchain/validators/tld_registration/tests/tld_reference.ak#L187))
   with `minted == 2`.
   The unit tests validate each validator in isolation and do not drive the
   registrar's `OwnerAction` concurrently, so the coupling between split/merge

@@ -110,7 +110,7 @@ Our validation system enables Handshake domain owners to:
 
 The validation mechanism is implemented across four on-chain pieces:
 
-**registrar_token.ak**: Mints the registrar auth NFT used by the registrar wallet
+**registrar_nft.ak** (validator `registrar_token`): Mints the registrar auth NFT used by the registrar wallet
 **tld_registrar.ak**: Handles initial registration, one-time owner signature verification, and registrar NFT bearer authority
 **tld_reference.ak**: Manages reference tokens and subdomain operations
 **sld_reference.ak**: Manages SLD reference tokens and DNS records, coordinated with `tld_reference`
