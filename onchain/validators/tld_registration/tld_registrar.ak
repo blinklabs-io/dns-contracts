@@ -105,14 +105,10 @@ validator tld_registrar(
           True
         }
 
-        let new_minted = // Must mint or burn - zero changes are prohibited to prevent no-op transactions
-        if !(tld_reference_mint_am == 0) {
-          minted + tld_reference_mint_am
-        } else {
-          fail
-        }
+        // Must mint or burn - zero changes are prohibited to prevent no-op transactions
+        expect !(tld_reference_mint_am == 0)
         let registration_datum = InlineDatum(
-          TLDRegisterDatum(tld, owner_hns_key, new_minted),
+          TLDRegisterDatum(tld, owner_hns_key, minted + tld_reference_mint_am),
         )
         let output_exists = check_output_exist(
           outputs,

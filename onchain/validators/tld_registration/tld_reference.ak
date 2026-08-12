@@ -195,14 +195,12 @@ validator tld_reference(
           [],
           fn(output, all) {
             if get_asset_name(output.value, policy_id) == tld_r_tn {
-              if two_token_value(output.value)? && is_none(
-                output.reference_script,
-              )? && (output.address == own_address)? {
-                expect dat: TLDReferenceDatum = get_inline_datum_output(output)
-                push(all, dat)
-              } else {
-                fail
-              }
+              expect
+                two_token_value(output.value)? && is_none(
+                  output.reference_script,
+                )? && (output.address == own_address)?
+              expect dat: TLDReferenceDatum = get_inline_datum_output(output)
+              push(all, dat)
             } else {
               all
             }
