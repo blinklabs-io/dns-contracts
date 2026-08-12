@@ -122,14 +122,14 @@ validator tld_reference(
       InitRemoveReference -> {
         let Transaction { inputs, outputs, mint, .. } = tx
         // get tld registration utxo -> tld amount validation
-        let (tld, minted) = get_tld_reference_datum(
+        let (tld, minted_counter) = get_tld_reference_datum(
           inputs,
           tld_registrar_policy_id,
           policy_id,
         )
         let tld_r_tn = create_reference_token_tn(tld)
         // either minting or burning tld reference token pair
-        if minted == 0 {
+        if minted_counter == 0 {
           expect [own_output] = filter_single_token_in_outputs(
             outputs,
             policy_id,
@@ -153,6 +153,7 @@ validator tld_reference(
           )?
           output_is_correct? && correct_mint?
         } else {
+          expect minted_counter == 1
           check_init_minting(mint, policy_id, tld, tld_r_tn, -1)?
         }
       }
@@ -161,7 +162,7 @@ validator tld_reference(
         // Split operation: one input UTxO becomes two output UTxOs
         // Distributes SLDs across outputs while maintaining sorted order and linked list integrity
         // get tld registration utxo -> tld amount validation
-        let (tld, minted) = get_tld_reference_datum(
+        let (tld, minted_counter) = get_tld_reference_datum(
           inputs,
           tld_registrar_policy_id,
           policy_id,
@@ -170,7 +171,7 @@ validator tld_reference(
         // not more than one tld reference token can be added at a time
         let correct_mint = single_value(mint, policy_id, tld_r_tn, 1)
         // first mint -> InitRemoveReference
-        let not_first = !(minted == 0)?
+        let not_first = !(minted_counter == 0)?
         // not more than input
         expect [Input { output: own_input, .. }] = filter_input_with_token(
           inputs,
@@ -237,7 +238,7 @@ validator tld_reference(
         // Merge operation: two input UTxOs become one output UTxO
         // Combines SLDs from both inputs while preserving linked list connections
         // get tld registration utxo -> tld amount validation
-        let (tld, minted) = get_tld_reference_datum(
+        let (tld, minted_counter) = get_tld_reference_datum(
           inputs,
           tld_registrar_policy_id,
           policy_id,
@@ -275,7 +276,7 @@ validator tld_reference(
           = get_inline_datum_output(own_output)
         let correct_mint = single_value(mint, policy_id, tld_r_tn, -1)
         // last burn -> InitRemoveReference
-        let not_last = (minted > 1)?
+        let not_last = (minted_counter > 1)?
         // first and last next are same as before to keep linked list in tact
         let tld_same = tld == tld_new
         let next_is_valid = if own_input_dat1.next == head_list(

@@ -185,6 +185,33 @@ test success_tld_reference_burn() {
   ) && tld_reference_mint(InitRemoveReference, burn_remove_succeed_tx)
 }
 
+const burn_remove_fail_minted_two_tx =
+  Transaction {
+    ..placeholder,
+    inputs: [
+      Input(
+        mock_utxo_ref("0", 0),
+        create_tld_reference_output([], ["a", "b"], "c"),
+      ),
+      Input(mock_utxo_ref("0", 2), create_tld_registrar_output("", 2)),
+      Input(mock_utxo_ref("12", 12), create_tld_user_token_output),
+    ],
+    mint: add(
+      from_asset(tld_reference_cs, create_reference_token_tn(tld), -1),
+      tld_reference_cs,
+      create_user_token_tn(tld),
+      -1,
+    ),
+  }
+
+test fail_tld_reference_init_remove_burn_with_minted_two() fail {
+  tld_reference_spend(
+    TLDReferenceDatum(tld, [], sld_reference_cs, "", []),
+    SpendReference,
+    burn_remove_fail_minted_two_tx,
+  ) && tld_reference_mint(InitRemoveReference, burn_remove_fail_minted_two_tx)
+}
+
 test success_tld_reference_burn_with_minted_two() {
   tld_reference_spend(
     TLDReferenceDatum(tld, [], sld_reference_cs, "", []),
