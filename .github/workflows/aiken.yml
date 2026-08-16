@@ -1,0 +1,35 @@
+name: aiken
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: onchain
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.23
+
+      - name: aiken fmt --check
+        run: aiken fmt --check
+
+      - name: aiken check
+        run: aiken check
+
+      - name: aiken build
+        run: aiken build
+
+      - name: Verify plutus.json is up to date
+        run: |
+          if ! git diff --exit-code plutus.json; then
+            echo "::error::onchain/plutus.json is out of date. Run 'aiken build' and commit the result."
+            exit 1
+          fi

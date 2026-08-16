@@ -93,7 +93,8 @@ const tld_owner_spend_succeed_tx =
       ),
     ],
     outputs: [
-      create_tld_registrar_output(tld_owner_vkey, 1), create_tld_user_token_output,
+      create_tld_registrar_output(tld_owner_vkey, 1),
+      create_tld_user_token_output,
     ],
     mint: from_asset(tld_reference_cs, create_reference_token_tn(tld), 1),
   }
